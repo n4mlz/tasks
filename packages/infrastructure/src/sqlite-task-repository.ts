@@ -47,4 +47,47 @@ export class SqliteTaskRepository {
       updatedAt: String(row.updated_at),
     };
   }
+
+  async listSchedulable(): Promise<Task[]> {
+    const rows = this.db
+      .prepare(
+        `
+          SELECT *
+          FROM tasks
+          WHERE status IN ('inbox', 'active') AND remaining_minutes > 0
+          ORDER BY created_at ASC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      notes: String(row.notes),
+      status: row.status as Task["status"],
+      remainingMinutes: Number(row.remaining_minutes),
+      dueDate: row.due_date ? String(row.due_date) : null,
+      urgency: row.urgency as Task["urgency"],
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }));
+  }
+
+  async listAll(): Promise<Task[]> {
+    const rows = this.db
+      .prepare(`SELECT * FROM tasks ORDER BY created_at DESC`)
+      .all() as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      notes: String(row.notes),
+      status: row.status as Task["status"],
+      remainingMinutes: Number(row.remaining_minutes),
+      dueDate: row.due_date ? String(row.due_date) : null,
+      urgency: row.urgency as Task["urgency"],
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }));
+  }
 }

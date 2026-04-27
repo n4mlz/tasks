@@ -17,4 +17,23 @@ export class SqliteCapacityRepository {
       )
       .run(capacity);
   }
+
+  async listBetween(dateFrom: string, dateTo: string): Promise<DayCapacity[]> {
+    const rows = this.db
+      .prepare(
+        `
+          SELECT *
+          FROM day_capacities
+          WHERE date >= ? AND date <= ?
+          ORDER BY date ASC
+        `,
+      )
+      .all(dateFrom, dateTo) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      date: String(row.date),
+      availableMinutes: Number(row.available_minutes),
+      bufferMinutes: Number(row.buffer_minutes),
+    }));
+  }
 }

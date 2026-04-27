@@ -13,15 +13,23 @@ export class SqliteScheduleRepository {
     riskFlags: string[];
   }): Promise<void> {
     const summaryJson = JSON.stringify({ riskFlags: proposal.riskFlags });
-    this.db
-      .prepare(
-        `
-          INSERT INTO schedule_proposals (
-            id, status, reason, generated_at, horizon_start, horizon_end, summary_json
-          ) VALUES (?, 'pending', ?, ?, ?, ?, ?)
-        `,
-      )
-      .run(
+    const insertProposal = this.db.prepare(
+      `
+        INSERT INTO schedule_proposals (
+          id, status, reason, generated_at, horizon_start, horizon_end, summary_json
+        ) VALUES (?, 'pending', ?, ?, ?, ?, ?)
+      `,
+    );
+    const insertSlice = this.db.prepare(
+      `
+        INSERT INTO scheduled_task_slices (
+          id, proposal_id, task_id, date, planned_minutes, kind
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `,
+    );
+
+    const tx = this.db.transaction(() => {
+      insertProposal.run(
         proposal.id,
         proposal.reason,
         proposal.generatedAt,
@@ -29,6 +37,21 @@ export class SqliteScheduleRepository {
         proposal.horizonEnd,
         summaryJson,
       );
+
+      for (let index = 0; index < proposal.slices.length; index += 1) {
+        const slice = proposal.slices[index];
+        insertSlice.run(
+          `${proposal.id}_slice_${index}`,
+          proposal.id,
+          slice.taskId,
+          slice.date,
+          slice.plannedMinutes,
+          slice.kind,
+        );
+      }
+    });
+
+    tx();
   }
 
   async findById(proposalId: string): Promise<Record<string, unknown> | null> {
@@ -82,10 +105,26 @@ export class SqliteScheduleRepository {
   }
 
   async approveProposal(_proposalId: string, _approvedAt: string): Promise<void> {
-    return undefined;
+    const updateStatus = this.db.prepare(
+      `UPDATE schedule_proposals SET status = 'approved' WHERE id = ?`,
+    );
+    const insertSnapshot = this.db.prepare(
+      `
+        INSERT INTO schedule_snapshots (id, active_proposal_id, updated_at)
+        VALUES (?, ?, ?)
+      `,
+    );
+    const tx = this.db.transaction(() => {
+      updateStatus.run(_proposalId);
+      insertSnapshot.run(`${_proposalId}_snapshot`, _proposalId, _approvedAt);
+    });
+
+    tx();
   }
 
   async rejectProposal(_proposalId: string): Promise<void> {
-    return undefined;
+    this.db
+      .prepare(`UPDATE schedule_proposals SET status = 'rejected' WHERE id = ?`)
+      .run(_proposalId);
   }
 }

@@ -1,0 +1,140 @@
+import { randomUUID } from "node:crypto";
+import {
+  approveProposalUseCase,
+  createTaskUseCase,
+  logWorkUseCase,
+  setCapacityUseCase,
+} from "../../../packages/application/src/index";
+import {
+  createDatabase,
+  migrate,
+  SqliteCapacityRepository,
+  SqliteScheduleRepository,
+  SqliteTaskRepository,
+  SqliteWorkLogRepository,
+} from "../../../packages/infrastructure/src/index";
+
+type TaskPlatform = {
+  createTask: (input: {
+    title: string;
+    remainingMinutes: number;
+    dueDate?: string | null;
+    urgency?: "today" | "soon" | "normal";
+    notes?: string;
+  }) => Promise<void>;
+  logWork: (input: {
+    taskId: string;
+    date: string;
+    spentMinutes: number;
+    remainingMinutesAfter: number;
+    note?: string;
+  }) => Promise<void>;
+  setCapacity: (input: {
+    date: string;
+    availableMinutes: number;
+    bufferMinutes?: number;
+  }) => Promise<void>;
+  approveProposal: (input: { proposalId: string }) => Promise<void>;
+  rejectProposal: (input: { proposalId: string }) => Promise<void>;
+  listTasks: () => Promise<unknown>;
+  getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
+  listProposals: (status?: string) => Promise<unknown>;
+  getCurrentSchedule: () => Promise<unknown>;
+};
+
+let taskPlatformInstance: TaskPlatform | null = null;
+
+function getTaskPlatform(): TaskPlatform {
+  if (taskPlatformInstance) {
+    return taskPlatformInstance;
+  }
+
+  const db = createDatabase(process.env.TASK_PLATFORM_DB ?? "task-platform.db");
+  migrate(db);
+
+  const taskRepository = new SqliteTaskRepository(db);
+  const capacityRepository = new SqliteCapacityRepository(db);
+  const scheduleRepository = new SqliteScheduleRepository(db);
+  const workLogRepository = new SqliteWorkLogRepository(db);
+
+  const clock = {
+    now: () => new Date().toISOString(),
+    today: () => new Date().toISOString().slice(0, 10),
+  };
+
+  const idGenerator = {
+    next: (prefix: string) => `${prefix}_${randomUUID()}`,
+  };
+
+  taskPlatformInstance = {
+    async createTask(input) {
+      return createTaskUseCase(
+        {
+          taskRepository,
+          capacityRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
+    },
+    async logWork(input) {
+      return logWorkUseCase(
+        {
+          taskRepository,
+          workLogRepository,
+          capacityRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
+    },
+    async setCapacity(input) {
+      return setCapacityUseCase(
+        {
+          capacityRepository,
+          taskRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
+    },
+    async approveProposal(input) {
+      return approveProposalUseCase(
+        {
+          scheduleRepository,
+          clock,
+        },
+        input,
+      );
+    },
+    async rejectProposal(input) {
+      return scheduleRepository.rejectProposal(input.proposalId);
+    },
+    async listTasks() {
+      return taskRepository.listAll();
+    },
+    async getCapacities(dateFrom: string, dateTo: string) {
+      return capacityRepository.listBetween(dateFrom, dateTo);
+    },
+    async listProposals(status?: string) {
+      return scheduleRepository.listByStatus(status);
+    },
+    async getCurrentSchedule() {
+      return scheduleRepository.getCurrentSchedule();
+    },
+  };
+
+  return taskPlatformInstance;
+}
+
+export const taskPlatform = new Proxy({} as TaskPlatform, {
+  get(_target, property) {
+    return getTaskPlatform()[property as keyof TaskPlatform];
+  },
+});
