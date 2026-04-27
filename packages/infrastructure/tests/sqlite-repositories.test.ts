@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createDatabase,
@@ -23,5 +24,19 @@ describe("SQLite task repository", () => {
     const loaded = await repository.findById("task_repo");
 
     expect(loaded?.title).toBe("Book train ticket");
+  });
+
+  it("loads migrations independently of the current working directory", () => {
+    const originalCwd = process.cwd();
+
+    try {
+      process.chdir(path.resolve(originalCwd, "apps/web"));
+
+      const db = createDatabase(":memory:");
+
+      expect(() => migrate(db)).not.toThrow();
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 });

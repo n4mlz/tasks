@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
   approveProposalUseCase,
   createTaskUseCase,
@@ -12,6 +13,7 @@ import {
 import {
   createDatabase,
   migrate,
+  resolveWorkspaceRoot,
   SqliteCapacityRepository,
   SqliteMetricsRepository,
   SqliteScheduleRepository,
@@ -68,7 +70,10 @@ function getTaskPlatform(): TaskPlatform {
     return taskPlatformInstance;
   }
 
-  const db = createDatabase(process.env.TASK_PLATFORM_DB ?? "task-platform.db");
+  const dbPath =
+    process.env.TASK_PLATFORM_DB ??
+    path.join(resolveWorkspaceRoot(), "task-platform.db");
+  const db = createDatabase(dbPath);
   migrate(db);
 
   const taskRepository = new SqliteTaskRepository(db);
