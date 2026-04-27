@@ -1,0 +1,18 @@
+{
+  "name": "@task-platform/application",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@task-platform/contracts": "workspace:*",
+    "@task-platform/domain": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest --run"
+  }
+}
