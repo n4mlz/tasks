@@ -1,5 +1,14 @@
 export type TaskStatus = "inbox" | "active" | "done" | "archived";
 export type TaskUrgency = "today" | "soon" | "normal";
+export type TaskType =
+  | "deep"
+  | "shallow"
+  | "admin"
+  | "research"
+  | "writing"
+  | "implementation"
+  | "unknown";
+export type TaskEnergy = "low" | "medium" | "high" | "unknown";
 
 export interface Task {
   id: string;
@@ -9,6 +18,8 @@ export interface Task {
   remainingMinutes: number;
   dueDate: string | null;
   urgency: TaskUrgency;
+  taskType: TaskType;
+  energy: TaskEnergy;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,6 +32,8 @@ export interface CreateTaskInput {
   dueDate?: string | null;
   notes?: string;
   urgency?: TaskUrgency;
+  taskType?: TaskType;
+  energy?: TaskEnergy;
   status?: TaskStatus;
 }
 
@@ -47,6 +60,8 @@ export function createTask(input: CreateTaskInput): Task {
     remainingMinutes: input.remainingMinutes,
     dueDate: input.dueDate ?? null,
     urgency: input.urgency ?? "normal",
+    taskType: input.taskType ?? "unknown",
+    energy: input.energy ?? "unknown",
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
   };

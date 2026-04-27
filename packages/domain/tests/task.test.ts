@@ -2,10 +2,36 @@ import { describe, expect, it } from "vitest";
 import { createDayCapacity, createTask, updateTaskEstimate } from "../src/index";
 
 describe("task validation", () => {
+  it("defaults taskType and energy to unknown", () => {
+    const task = createTask({
+      id: "task_1",
+      title: "Write summary",
+      remainingMinutes: 60,
+      createdAt: "2026-04-27T00:00:00.000Z",
+    });
+
+    expect(task.taskType).toBe("unknown");
+    expect(task.energy).toBe("unknown");
+  });
+
+  it("preserves explicit taskType and energy", () => {
+    const task = createTask({
+      id: "task_2",
+      title: "Implement scheduler",
+      remainingMinutes: 120,
+      createdAt: "2026-04-27T00:00:00.000Z",
+      taskType: "implementation",
+      energy: "high",
+    });
+
+    expect(task.taskType).toBe("implementation");
+    expect(task.energy).toBe("high");
+  });
+
   it("rejects non-positive remaining minutes", () => {
     expect(() =>
       createTask({
-        id: "task_2",
+        id: "task_invalid",
         title: "Bad task",
         remainingMinutes: 0,
         createdAt: "2026-04-27T00:00:00.000Z",

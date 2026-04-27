@@ -8,6 +8,10 @@ export const createTaskInputSchema = z.object({
   remainingMinutes: z.number().int().positive(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   urgency: taskUrgencySchema.optional(),
+  taskType: z
+    .enum(["deep", "shallow", "admin", "research", "writing", "implementation", "unknown"])
+    .optional(),
+  energy: z.enum(["low", "medium", "high", "unknown"]).optional(),
   notes: z.string().optional(),
 });
 
