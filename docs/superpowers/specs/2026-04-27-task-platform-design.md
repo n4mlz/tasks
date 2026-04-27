@@ -2,95 +2,107 @@
 
 ## Overview
 
-This document defines the MVP design for a personal task management platform that reduces cognitive load by separating:
+This document defines the current target design for the single-user Task Platform.
 
-- a control plane where the user enters and adjusts tasks, estimates, and available time
-- a data plane where the user mainly executes the tasks assigned for today
+The system is meant to reduce cognitive load by separating:
 
-The system is designed for a single user, runs as an always-on personal service, and exposes its capabilities both through a Web UI and an MCP server so Hermes Agent or other MCP-capable agents can interact with it through function calling.
+- a control plane for inbox capture, estimate updates, deadline editing, day-capacity editing, and proposal review
+- a data plane where the user mostly looks at today's assigned work and records execution feedback
 
-The MVP is intentionally narrow. It focuses on:
+The platform is always-on, single-user, proposal-driven, and available through both a Web UI and an MCP server. Hermes Agent is an important target consumer, but the integration model must remain agent-agnostic and rely on MCP function calling rather than Hermes-specific behavior.
 
-- capturing tasks into an inbox quickly
-- storing remaining work estimates and deadlines
-- storing daily available capacity and buffer
-- generating explainable schedule proposals
-- letting the user approve or reject those proposals
-- showing a simple daily execution view
-- logging work and re-scheduling after changes
+This revision extends the original MVP design in four ways:
 
-The design must allow future expansion into stronger automation, external integrations, richer metrics, and more advanced planning behavior without breaking the core model.
+- scheduling must operate over a real multi-day horizon rather than near-today only
+- the Web UI must be usable by a human without depending on MCP for routine operations
+- task properties must support lightweight work-shape hints for better scheduling
+- the UI must become a modern personal dashboard rather than an unstyled technical placeholder
 
 ## Goals
 
-- Reduce the amount of unfinished work the user has to keep in working memory.
-- Provide a reliable daily plan where "doing today's list" means things are progressing safely.
-- Keep the interaction model simple enough to sustain daily use.
-- Make scheduling and review behavior part of the system rather than a manual ritual.
-- Support agent assistance safely through proposal-based scheduling rather than fully autonomous mutation.
+- Let the user offload tasks into an inbox instead of holding them in working memory.
+- Provide a trustworthy daily plan where finishing today's list means things are progressing safely.
+- Allow week-level capacity planning with explicit buffer.
+- Keep schedule mutations proposal-based and human-approved.
+- Expose the same core model to Web UI and MCP clients.
+- Support lightweight agent assistance for planning, summarization, and progress evaluation.
+- Make the interface pleasant enough for daily personal use on desktop and mobile.
 
-## Non-Goals For MVP
+## Non-Goals
 
 - Habit tracking
 - Multi-user support
-- External LMS or task service integrations
+- External LMS or task-service integration
 - Agent auto-approval of schedule changes
-- Advanced ML-based task classification
-- Sophisticated notification systems
-- Heavy timeline visualizations
+- ML-heavy prediction or opaque optimization
+- Push-notification systems
+- Complex portfolio/project hierarchy
 
 ## Architecture
 
-The system will be implemented as a TypeScript modular monolith in a pnpm workspace.
+The system remains a TypeScript modular monolith in a pnpm workspace.
 
-Core design principles:
+Core principles:
 
-- domain and scheduling rules live in shared packages
-- Web UI and MCP server both call the same application services
-- persistence is abstracted through repository interfaces
-- SQLite is the initial storage backend
-- background re-scheduling starts as an in-process job runner, with boundaries that allow later extraction into a separate worker
+- domain rules live in shared packages
+- Web UI and MCP server call the same application layer
+- persistence stays abstracted through repositories
+- SQLite remains the initial backend
+- schedule generation is explainable and deterministic
+- proposal approval remains the only way to update the active schedule
 
 ### High-Level Components
 
 #### Web Application
 
-Provides the user-facing UI for:
+Provides user-facing views for:
 
-- today's assigned work
-- inbox capture and task editing
-- weekly capacity editing
-- viewing and approving scheduling proposals
+- Today
+- Inbox
+- Week
+- Proposals
+
+The Web application must cover routine usage end-to-end:
+
+- create and edit tasks
+- create and edit day capacities
+- review and approve proposals
+- record work performed
+- inspect current metrics
 
 #### HTTP API
 
-Provides JSON endpoints for the Web application.
+Provides JSON endpoints for the Web application. The API is internal-facing but should remain consistent enough to support future clients.
 
 #### MCP Server
 
-Exposes task and scheduling capabilities as MCP tools for Hermes Agent and other MCP-capable agents. The MCP server does not get privileged scheduling powers; it generates and inspects proposals and uses the same approval workflow as the Web UI.
+Exposes task, capacity, schedule, and metrics operations to Hermes Agent and any other MCP-capable client.
+
+The MCP server may help generate proposals, summarize them, or inspect progress, but it does not bypass human approval of schedule changes.
 
 #### Application Layer
 
 Implements use cases such as:
 
-- creating tasks
-- updating estimates
-- logging work
-- setting daily capacity
-- generating schedule proposals
-- approving or rejecting proposals
-- retrieving metrics
+- create task
+- update task
+- log work
+- set capacity
+- generate schedule proposal
+- approve proposal
+- reject proposal
+- get metrics
 
 #### Domain Layer
 
-Contains the core business model and pure scheduling logic, including:
+Contains:
 
-- scheduling horizon selection
+- task model
+- capacity model
+- schedule proposal model
+- scheduling heuristics
 - buffer handling
-- risk flag generation
-- task ordering heuristics
-- schedule slice generation
+- risk summary generation
 
 #### Infrastructure Layer
 
@@ -98,23 +110,23 @@ Implements:
 
 - SQLite repositories
 - migrations
+- workspace path resolution
 - ID generation
 - clock abstraction
-- transactional persistence
 
 #### Scheduler Orchestrator
 
-Runs schedule proposal generation whenever relevant state changes occur, such as:
+Handles proposal regeneration when relevant state changes:
 
 - task created
 - task updated
 - work logged
 - capacity updated
-- manual re-schedule requested
+- manual generation requested
 
-For MVP, this can be an in-process queue or async trigger that calls application services.
+For now this remains in-process and synchronous enough to keep the implementation simple.
 
-## Proposed Repository Structure
+## Repository Structure
 
 ```text
 apps/
@@ -129,58 +141,14 @@ packages/
 docs/
   superpowers/
     specs/
+    plans/
 ```
-
-### Package Responsibilities
-
-#### `apps/web`
-
-- Next.js application
-- Today, Inbox, Week, Proposals views
-- Route handlers or server actions for API access
-
-#### `apps/mcp`
-
-- MCP server setup
-- tool registration
-- input validation
-- application service invocation
-
-#### `packages/domain`
-
-- entities
-- value objects
-- scheduling rules
-- risk evaluation
-
-#### `packages/application`
-
-- use case orchestration
-- transaction boundaries
-- repository interfaces
-
-#### `packages/infrastructure`
-
-- SQLite schema and repository implementations
-- persistence setup
-
-#### `packages/contracts`
-
-- zod schemas
-- shared DTO definitions for API and MCP
-
-#### `packages/scheduler`
-
-- schedule generation orchestration
-- proposal trigger wiring
 
 ## Domain Model
 
-The MVP keeps the model intentionally small. Inbox is represented as task state rather than a separate entity.
+Inbox remains a filtered task state rather than a separate entity.
 
 ### Task
-
-Represents a unit of work that may or may not already be actively scheduled.
 
 Fields:
 
@@ -191,18 +159,19 @@ Fields:
 - `remainingMinutes`
 - `dueDate` nullable
 - `urgency`: `today | soon | normal`
+- `taskType`: `deep | shallow | admin | research | writing | implementation | unknown`
+- `energy`: `low | medium | high | unknown`
 - `createdAt`
 - `updatedAt`
 
 Rationale:
 
-- `status=inbox` avoids a separate inbox object and keeps promotion logic simple.
-- `remainingMinutes` is the central planning quantity and is updated whenever work is logged.
-- `urgency` is a light user-supplied override for practical short-term prioritization.
+- `remainingMinutes` remains the central planning quantity
+- `dueDate` and `urgency` control explicit user intent
+- `taskType` and `energy` provide lightweight scheduling hints without requiring heavy modeling
+- `unknown` is preferred over null so every layer can reason consistently
 
 ### TaskWorkLog
-
-Represents actual execution feedback entered by the user.
 
 Fields:
 
@@ -213,14 +182,9 @@ Fields:
 - `remainingMinutesAfter`
 - `note`
 
-Rationale:
-
-- the log captures both actual time spent and the user’s updated estimate
-- this supports better future metrics and immediate re-scheduling
+This is the main execution feedback loop for rescheduling and metrics.
 
 ### DayCapacity
-
-Represents how much work can realistically be done on a date.
 
 Fields:
 
@@ -228,13 +192,9 @@ Fields:
 - `availableMinutes`
 - `bufferMinutes`
 
-Rationale:
-
-- `bufferMinutes` is explicit rather than derived-only, so the user or future agents can tune it directly
+The user may enter capacity for any date, edit it later, and use it to shape a week-level plan.
 
 ### ScheduleProposal
-
-Represents a generated but not necessarily active plan.
 
 Fields:
 
@@ -246,14 +206,13 @@ Fields:
 - `horizonEnd`
 - `summaryJson`
 
-Rationale:
+`summaryJson` must contain, at minimum:
 
-- the system is proposal-driven so agent activity stays safe and reviewable
-- `summaryJson` can hold a stable summary of risk and reasoning for display
+- `riskFlags`
+- `unscheduledTaskIds`
+- `capacityPressureByDate`
 
 ### ScheduledTaskSlice
-
-Represents planned work for a task on a specific day within a proposal.
 
 Fields:
 
@@ -264,368 +223,188 @@ Fields:
 - `plannedMinutes`
 - `kind`: `focus | buffer_fill`
 
-Rationale:
-
-- the slice is the bridge between high-level task state and daily execution
-
-### ScheduleSnapshot
-
-Represents the currently active approved schedule.
-
-Fields:
-
-- `id`
-- `activeProposalId`
-- `updatedAt`
-
-Rationale:
-
-- current state should be easy to resolve without re-deriving which approved proposal is active
-
 ## Scheduling Rules
 
-The scheduling engine should optimize first for clarity and trust, not algorithmic cleverness.
+The scheduler must become horizon-based rather than near-today-only.
 
-### Inputs
+### Horizon Selection
 
-- all tasks where `status` is `inbox` or `active`
-- only tasks with `remainingMinutes > 0`
-- daily capacities in the planning horizon
-- per-task deadlines and urgency
+- Start at `today`
+- End at `max(latest due date - 1 day, today + 6 days)`
+- If there are no due dates, still plan at least through the next 7 days
 
-### Horizon
+### Capacity Handling
 
-- start at `today`
-- end at the later of:
-  - the latest due date among schedulable tasks
-  - `today + 14 days`
+- Read all capacities within the horizon
+- Use `usableMinutes = max(availableMinutes - bufferMinutes, 0)`
+- Missing capacity days are treated as zero-capacity unless a future policy changes that
 
-This gives enough room for both deadline-bound and floating tasks without overcommitting to a distant future in MVP.
+### Ordering Heuristics
 
-### Usable Capacity
-
-For each day:
-
-- `usableMinutes = max(availableMinutes - bufferMinutes, 0)`
-
-Default buffer policy for new day capacity entries:
-
-- `bufferMinutes = round(availableMinutes * 0.2)`
-
-Later the user may override this per day.
-
-### Deadline Handling
-
-- tasks with due dates should aim to finish by the day before the due date
-- if total capacity before that point is insufficient, mark the task as at risk
-
-This intentionally leaves one day of slack where possible.
-
-### Priority Order
-
-Planning order for MVP:
+Tasks are ordered using:
 
 1. `urgency=today`
-2. tasks with the highest deadline pressure
-3. remaining tasks by earliest due date first
-4. undated tasks after dated tasks
+2. earlier `dueDate`
+3. work-shape hints
+4. creation order
 
-`deadline pressure` should incorporate how much remaining work must fit into how many usable days remain.
+Work-shape handling:
 
-### Slice Size
+- `deep` and `high` energy tasks should prefer higher-capacity days
+- `admin` and `shallow` tasks may use tighter remaining gaps
+- `unknown` behaves neutrally
 
-- default minimum slice size: `25` minutes
+### Deadline Safety
 
-This avoids unreadably fragmented schedules and keeps the output psychologically actionable.
+- Work is assigned before the due date rather than on it
+- If work cannot fit before the deadline, the task is flagged in `riskFlags`
+- Unplaced work must appear in `unscheduledTaskIds`
 
-### Re-Scheduling Behavior
+### Proposal Summary
 
-Generate a new proposal when:
+Each proposal must summarize:
 
-- a task is created
-- a task’s remaining estimate changes
-- a task’s due date changes
-- a task work log is added
-- a day capacity changes
-- the user or agent explicitly requests re-scheduling
+- unscheduled tasks
+- which days are over pressure or near exhaustion
+- whether today is overloaded
 
-The new proposal does not automatically replace the active one. It remains pending until approved.
-
-### Risk Flags
-
-The proposal summary should include explainable risk flags such as:
-
-- insufficient capacity before due date
-- buffer fully consumed
-- work pushed into overdue range
-- multiple `today` urgency tasks exceeding today’s usable capacity
-
-These flags are important both for the user and for agent reasoning.
-
-## MVP UX Model
-
-The system is split into a control plane and a data plane.
-
-### Control Plane
-
-Used when planning, adjusting, and reviewing:
-
-- Inbox
-- Week
-- Proposals
-
-### Data Plane
-
-Used during daily execution:
-
-- Today
-
-This separation is central to reducing the feeling that every interesting project is always "in progress" in an oppressive sense.
+The summary must be sufficiently readable for both UI rendering and MCP summarization.
 
 ## Web UI
 
-The MVP Web UI should have four primary screens.
+The UI direction is a modern personal dashboard, not a dense enterprise CRUD screen and not a calendar-only surface.
 
-### Today View
+### Design Direction
+
+- Today is the primary screen
+- typography, spacing, color, and hierarchy must make the app comfortable for daily use
+- mobile-first one-column layouts should still work well on desktop
+- planning views should feel structured and calm rather than visually noisy
+- the interface should be intentionally styled, not raw HTML defaults
+
+### Today
 
 Purpose:
 
-- show only what needs attention today
-- let the user log work quickly
+- show the approved slices for the current plan
+- allow quick work logging
 
-Key elements:
+Must support:
 
-- today’s scheduled task slices
-- planned minutes total
-- usable minutes total
-- remaining buffer for today
-- action to log work against a task
-- action to update remaining estimate
+- viewing today's slices
+- seeing the active proposal/source plan
+- entering `spentMinutes`
+- entering `remainingMinutesAfter`
+- optional work-log note
 
-Primary workflow:
-
-- user completes or partially completes a task
-- user records `spentMinutes` and `remainingMinutesAfter`
-- system generates a new schedule proposal if overall allocation changed
-
-### Inbox View
+### Inbox
 
 Purpose:
 
 - capture tasks quickly
-- edit the minimum scheduling attributes
+- review and lightly edit them
 
-Key elements:
+Must support:
 
-- task creation form
-- editable list of inbox and active tasks
-- fields for title, remaining estimate, due date, urgency, notes
-- visible status of whether a pending proposal exists
+- create task with `title`, `remainingMinutes`, `dueDate`, `urgency`, `taskType`, `energy`, `notes`
+- edit existing task properties
+- distinguish inbox vs active/done state
 
-### Week View
-
-Purpose:
-
-- set and adjust available capacity
-- inspect near-term distribution
-
-Key elements:
-
-- per-day available minutes
-- per-day buffer minutes
-- daily total planned load
-- indicators for overloaded or underloaded days
-- visible due-risk tasks
-
-### Proposals View
+### Week
 
 Purpose:
 
-- inspect generated plans before making them active
+- edit capacities for arbitrary dates
+- inspect near-term pressure and metrics
 
-Key elements:
+Must support:
 
-- list of pending and historical proposals
-- side-by-side difference from the active schedule
-- proposal reason
-- risk summary
-- approve or reject actions
+- editing `availableMinutes` and `bufferMinutes` per date
+- seeing a week-scale view of capacity entries
+- seeing metrics and pressure signals
 
-## MCP Tool Surface
+### Proposals
 
-The MCP surface should be small, explicit, and approval-oriented.
+Purpose:
 
-### Task Tools
+- review generated schedule changes before activation
 
-- `tasks_list(status?, dueBefore?, scheduledOn?)`
-- `task_create(title, remainingMinutes, dueDate?, urgency?, notes?)`
-- `task_update(taskId, title?, remainingMinutes?, dueDate?, urgency?, status?, notes?)`
-- `task_log_work(taskId, date, spentMinutes, remainingMinutesAfter, note?)`
+Must support:
 
-### Capacity Tools
+- list pending proposals
+- inspect proposal details
+- inspect `riskFlags`
+- inspect `unscheduledTaskIds`
+- inspect `capacityPressureByDate`
+- approve or reject
 
-- `capacity_get(dateFrom, dateTo)`
-- `capacity_set(date, availableMinutes, bufferMinutes?)`
+## MCP Surface
 
-### Scheduling Tools
+The MCP server should continue exposing the current capability categories:
 
-- `schedule_generate(reason)`
-- `schedule_get_current()`
-- `schedule_list_proposals(status?)`
-- `schedule_get_proposal(proposalId)`
-- `schedule_approve(proposalId)`
-- `schedule_reject(proposalId, reason?)`
+- task operations
+- capacity operations
+- schedule operations
+- metrics operations
 
-### Metrics Tools
+The contract must be extended to support new task attributes and richer proposal summaries.
 
-- `metrics_get(range?)`
+Expected usage patterns:
 
-### MCP Design Constraints
+- agent captures tasks into inbox
+- agent updates capacities
+- agent generates proposals
+- agent summarizes proposal risk
+- agent reads metrics for daily or weekly coaching
+- human approves the final plan
 
-- tools should expose stable structured schemas via zod-backed contracts
-- tools should not bypass application rules
-- agents can propose and inspect, but scheduling becomes active only by explicit approval
+This preserves a clean split:
 
-This design keeps the system Hermes-compatible without becoming Hermes-dependent.
+- system and agents assist with planning
+- the user keeps approval authority
+- everyday execution can still happen through Web UI alone
 
 ## Metrics
 
-The MVP metrics surface should stay simple and operationally useful.
+The current minimal metrics remain valid:
 
-Initial metrics:
+- planned minutes
+- actual minutes
+- completed minutes
+- at-risk task count
+- pending proposal count
 
-- planned minutes vs actual minutes over a range
-- total completed minutes this week
-- current buffer consumption by day
-- count of at-risk tasks
-- count of pending schedule proposals
+This revision also expects the backend to support week-level evaluation more naturally, even if the first implementation remains compact.
 
-These metrics should be available in the Web UI and through MCP.
+## Data Ownership Model
 
-## Data Flow
+The intended operating model is:
 
-### Task Capture Flow
+- most planning mutations can be performed either from Web UI or MCP
+- daily human use should not require MCP
+- agent intervention is primarily valuable for schedule generation, explanation, and progress evaluation
 
-1. user creates or edits a task in Inbox
-2. application persists the task
-3. scheduler trigger creates a pending proposal
-4. user or agent reviews the proposal
-5. user approves or rejects it
+In other words:
 
-### Daily Execution Flow
+- Web UI must be sufficient for normal operation
+- MCP must be helpful, not mandatory
 
-1. user opens Today
-2. user sees slices from the active schedule
-3. user logs time spent and updates remaining estimate
-4. application stores the work log and task update
-5. scheduler creates a new proposal if needed
+## Migration / Cleanup Requirement
 
-### Capacity Adjustment Flow
+This work also includes repository hygiene for public-facing documentation:
 
-1. user edits available minutes or buffer minutes in Week
-2. application stores the capacity change
-3. scheduler creates a new proposal
-4. user reviews and approves if desired
+- no local absolute paths in README or public docs
+- existing leaked local-path history must be rewritten when still on unpublished or branch-local history that can safely be force-pushed
 
-## Error Handling
+## Acceptance Criteria
 
-MVP should handle the following predictably:
+The design is considered satisfied when:
 
-- missing capacity days in the horizon
-  - either assume zero usable time or prompt for capacity entry before approval
-- invalid task estimates
-  - reject negative values and zero-minute active tasks
-- impossible schedules
-  - still generate a proposal, but mark affected tasks and days with risk flags
-- stale proposals
-  - when a newer proposal is generated, older pending ones can be marked `superseded`
-
-The system should prefer explicit degraded output over silent failure.
-
-## Extensibility Strategy
-
-The MVP must support future growth without rewriting the core model.
-
-Planned extension areas:
-
-- task type classification and heuristics
-- external importers, including university systems
-- optional reminders and coaching
-- better schedule ranking logic
-- automatic estimate suggestions
-- separate worker process for scheduling
-- richer analytics and retrospectives
-
-Key design choices that enable this:
-
-- repository abstraction over SQLite
-- proposal model instead of direct mutation
-- MCP as the primary agent integration surface
-- shared application services across transport layers
-
-## Testing Strategy
-
-The implementation should be TDD-first.
-
-### Domain Tests
-
-Highest priority:
-
-- usable capacity calculation
-- buffer handling
-- scheduling horizon calculation
-- task ordering and deadline pressure
-- risk flag generation
-- slice generation constraints
-
-### Application Tests
-
-Use case coverage:
-
-- creating a task triggers proposal generation
-- editing capacity triggers proposal generation
-- logging work updates task state and triggers proposal generation
-- approving a proposal updates the active snapshot
-- rejecting a proposal preserves the active schedule
-
-### Infrastructure Tests
-
-- SQLite repository persistence
-- migration correctness
-- transaction behavior
-
-### MCP Tests
-
-- input schema validation
-- mapping from tool calls to application services
-- stable structured output shape
-
-### Web Tests
-
-- inbox task creation flow
-- today work logging flow
-- proposal approval flow
-- week capacity editing flow
-
-## Recommended Implementation Order
-
-1. domain model and scheduling rules
-2. application use cases and repository interfaces
-3. SQLite infrastructure
-4. scheduling orchestration
-5. MCP server
-6. Web UI
-
-This order lets the core behavior stabilize before UI work and aligns well with TDD.
-
-## Open Decisions Intentionally Deferred
-
-These are intentionally left out of MVP, not undefined:
-
-- whether capacity defaults are pre-generated into the future
-- how reminders are delivered
-- how agent-generated rationale is phrased
-- whether task categories should exist
-- whether recurring work should be modeled separately
-
-Those can be added later without changing the MVP core boundaries.
+- users can enter and edit task and capacity data through the Web UI
+- users can log work from the Today view
+- schedule proposals cover a real multi-day horizon
+- proposals expose enough detail to understand risk and missing allocations
+- MCP tools support the same enhanced model
+- metrics remain accessible for agents and UI
+- the UI is intentionally styled for day-to-day human use
+- documentation no longer contains leaked local absolute paths
