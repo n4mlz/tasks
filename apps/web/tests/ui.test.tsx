@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import HomePage from "../app/page";
 
 describe("Today page", () => {
-  it("renders the daily execution heading", () => {
-    render(<HomePage />);
+  it("renders the daily execution heading", async () => {
+    render(await HomePage());
     expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 });

@@ -59,13 +59,37 @@ export class SqliteScheduleRepository {
       .prepare(`SELECT * FROM schedule_proposals WHERE id = ?`)
       .get(proposalId) as Record<string, unknown> | undefined;
 
-    return row ?? null;
+    if (!row) {
+      return null;
+    }
+
+    const slices = this.db
+      .prepare(
+        `
+          SELECT proposal_id, task_id, date, planned_minutes, kind
+          FROM scheduled_task_slices
+          WHERE proposal_id = ?
+          ORDER BY date ASC, task_id ASC
+        `,
+      )
+      .all(proposalId) as Array<Record<string, unknown>>;
+
+    return {
+      ...row,
+      summary: JSON.parse(String(row.summary_json)),
+      slices,
+    };
   }
 
   async listByStatus(status = "pending"): Promise<Record<string, unknown>[]> {
-    return this.db
+    const rows = this.db
       .prepare(`SELECT * FROM schedule_proposals WHERE status = ? ORDER BY generated_at DESC`)
-      .all(status) as Record<string, unknown>[];
+      .all(status) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      ...row,
+      summary: JSON.parse(String(row.summary_json)),
+    }));
   }
 
   async getCurrentSchedule(): Promise<{

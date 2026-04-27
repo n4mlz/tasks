@@ -2,13 +2,18 @@ import { randomUUID } from "node:crypto";
 import {
   approveProposalUseCase,
   createTaskUseCase,
+  generateScheduleProposalUseCase,
+  getMetricsUseCase,
   logWorkUseCase,
+  rejectProposalUseCase,
   setCapacityUseCase,
+  updateTaskUseCase,
 } from "../../../packages/application/src/index";
 import {
   createDatabase,
   migrate,
   SqliteCapacityRepository,
+  SqliteMetricsRepository,
   SqliteScheduleRepository,
   SqliteTaskRepository,
   SqliteWorkLogRepository,
@@ -36,10 +41,24 @@ type TaskPlatform = {
   }) => Promise<void>;
   approveProposal: (input: { proposalId: string }) => Promise<void>;
   rejectProposal: (input: { proposalId: string }) => Promise<void>;
+  updateTask: (input: {
+    taskId: string;
+    title?: string;
+    remainingMinutes?: number;
+    dueDate?: string | null;
+    urgency?: "today" | "soon" | "normal";
+    status?: "inbox" | "active" | "done" | "archived";
+    notes?: string;
+  }) => Promise<void>;
+  generateSchedule: (input: {
+    reason: "task_created" | "task_updated" | "work_logged" | "capacity_updated" | "manual";
+  }) => Promise<void>;
   listTasks: () => Promise<unknown>;
   getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
   listProposals: (status?: string) => Promise<unknown>;
+  getProposal: (proposalId: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
+  getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
@@ -56,6 +75,7 @@ function getTaskPlatform(): TaskPlatform {
   const capacityRepository = new SqliteCapacityRepository(db);
   const scheduleRepository = new SqliteScheduleRepository(db);
   const workLogRepository = new SqliteWorkLogRepository(db);
+  const metricsRepository = new SqliteMetricsRepository(db);
 
   const clock = {
     now: () => new Date().toISOString(),
@@ -114,7 +134,36 @@ function getTaskPlatform(): TaskPlatform {
       );
     },
     async rejectProposal(input) {
-      return scheduleRepository.rejectProposal(input.proposalId);
+      return rejectProposalUseCase(
+        {
+          scheduleRepository,
+        },
+        input,
+      );
+    },
+    async updateTask(input) {
+      return updateTaskUseCase(
+        {
+          taskRepository,
+          capacityRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
+    },
+    async generateSchedule(input) {
+      return generateScheduleProposalUseCase(
+        {
+          taskRepository,
+          capacityRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
     },
     async listTasks() {
       return taskRepository.listAll();
@@ -125,8 +174,19 @@ function getTaskPlatform(): TaskPlatform {
     async listProposals(status?: string) {
       return scheduleRepository.listByStatus(status);
     },
+    async getProposal(proposalId: string) {
+      return scheduleRepository.findById(proposalId);
+    },
     async getCurrentSchedule() {
       return scheduleRepository.getCurrentSchedule();
+    },
+    async getMetrics(dateFrom: string, dateTo: string) {
+      return getMetricsUseCase(
+        {
+          metricsRepository,
+        },
+        { dateFrom, dateTo },
+      );
     },
   };
 

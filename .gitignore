@@ -4,3 +4,4 @@ apps/*/dist/
 apps/web/.next/
 apps/web/task-platform.db
 dist/
+task-platform.db

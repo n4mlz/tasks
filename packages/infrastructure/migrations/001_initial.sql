@@ -1,4 +1,4 @@
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   notes TEXT NOT NULL,
@@ -10,7 +10,7 @@ CREATE TABLE tasks (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE task_work_logs (
+CREATE TABLE IF NOT EXISTS task_work_logs (
   id TEXT PRIMARY KEY,
   task_id TEXT NOT NULL,
   date TEXT NOT NULL,
@@ -20,13 +20,13 @@ CREATE TABLE task_work_logs (
   FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
-CREATE TABLE day_capacities (
+CREATE TABLE IF NOT EXISTS day_capacities (
   date TEXT PRIMARY KEY,
   available_minutes INTEGER NOT NULL,
   buffer_minutes INTEGER NOT NULL
 );
 
-CREATE TABLE schedule_proposals (
+CREATE TABLE IF NOT EXISTS schedule_proposals (
   id TEXT PRIMARY KEY,
   status TEXT NOT NULL,
   reason TEXT NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE schedule_proposals (
   summary_json TEXT NOT NULL
 );
 
-CREATE TABLE scheduled_task_slices (
+CREATE TABLE IF NOT EXISTS scheduled_task_slices (
   id TEXT PRIMARY KEY,
   proposal_id TEXT NOT NULL,
   task_id TEXT NOT NULL,
@@ -47,7 +47,7 @@ CREATE TABLE scheduled_task_slices (
   FOREIGN KEY (task_id) REFERENCES tasks(id)
 );
 
-CREATE TABLE schedule_snapshots (
+CREATE TABLE IF NOT EXISTS schedule_snapshots (
   id TEXT PRIMARY KEY,
   active_proposal_id TEXT NOT NULL,
   updated_at TEXT NOT NULL

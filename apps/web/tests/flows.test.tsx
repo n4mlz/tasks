@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import InboxPage from "../app/inbox/page";
 
 describe("Inbox flow", () => {
-  it("renders task fields for title and remaining estimate", () => {
-    render(<InboxPage />);
+  it("renders task fields for title and remaining estimate", async () => {
+    render(await InboxPage());
 
     expect(screen.getByLabelText("Title")).toBeInTheDocument();
     expect(screen.getByLabelText("Remaining minutes")).toBeInTheDocument();
