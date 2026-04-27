@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   remaining_minutes INTEGER NOT NULL,
   due_date TEXT,
   urgency TEXT NOT NULL,
+  task_type TEXT NOT NULL DEFAULT 'unknown',
+  energy TEXT NOT NULL DEFAULT 'unknown',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

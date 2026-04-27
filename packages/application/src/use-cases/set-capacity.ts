@@ -6,6 +6,7 @@ import type {
   ScheduleRepository,
   TaskRepository,
 } from "../ports";
+import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
 
 export async function setCapacityUseCase(
   deps: {
@@ -25,10 +26,15 @@ export async function setCapacityUseCase(
   await deps.capacityRepository.upsert(capacity);
 
   const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    input.date,
-  );
+  const horizon = selectScheduleHorizon({
+    today: deps.clock.today(),
+    tasks,
+  });
+  const capacities = expandCapacityWindow({
+    dateFrom: horizon.start,
+    dateTo: horizon.end,
+    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
+  });
   const proposal = buildScheduleProposal({
     today: deps.clock.today(),
     tasks,

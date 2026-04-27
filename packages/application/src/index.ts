@@ -1,4 +1,5 @@
 export * from "./ports";
+export * from "./schedule-window";
 export { createTaskUseCase } from "./use-cases/create-task";
 export { updateTaskUseCase } from "./use-cases/update-task";
 export { logWorkUseCase } from "./use-cases/log-work";

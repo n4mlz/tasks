@@ -6,6 +6,7 @@ import type {
   ScheduleRepository,
   TaskRepository,
 } from "../ports";
+import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
 
 export async function updateTaskUseCase(
   deps: {
@@ -21,6 +22,8 @@ export async function updateTaskUseCase(
     remainingMinutes?: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?: "deep" | "shallow" | "admin" | "research" | "writing" | "implementation" | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   },
@@ -36,6 +39,8 @@ export async function updateTaskUseCase(
     remainingMinutes: input.remainingMinutes ?? task.remainingMinutes,
     dueDate: input.dueDate === undefined ? task.dueDate : input.dueDate,
     urgency: input.urgency ?? task.urgency,
+    taskType: input.taskType ?? task.taskType,
+    energy: input.energy ?? task.energy,
     status: input.status ?? task.status,
     notes: input.notes ?? task.notes,
     updatedAt: deps.clock.now(),
@@ -44,10 +49,15 @@ export async function updateTaskUseCase(
   await deps.taskRepository.save(updatedTask);
 
   const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    deps.clock.today(),
-  );
+  const horizon = selectScheduleHorizon({
+    today: deps.clock.today(),
+    tasks,
+  });
+  const capacities = expandCapacityWindow({
+    dateFrom: horizon.start,
+    dateTo: horizon.end,
+    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
+  });
   const proposal = buildScheduleProposal({
     today: deps.clock.today(),
     tasks,

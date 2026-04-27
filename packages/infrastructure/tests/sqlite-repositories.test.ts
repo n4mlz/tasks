@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDatabase,
   migrate,
+  SqliteScheduleRepository,
   SqliteTaskRepository,
 } from "../src/index";
 import { createTask } from "@task-platform/domain";
@@ -18,12 +19,50 @@ describe("SQLite task repository", () => {
       title: "Book train ticket",
       remainingMinutes: 15,
       createdAt: "2026-04-27T00:00:00.000Z",
+      taskType: "admin",
+      energy: "low",
     });
 
     await repository.save(task);
     const loaded = await repository.findById("task_repo");
 
     expect(loaded?.title).toBe("Book train ticket");
+    expect(loaded?.taskType).toBe("admin");
+    expect(loaded?.energy).toBe("low");
+  });
+
+  it("persists and reloads proposal summary details", async () => {
+    const db = createDatabase(":memory:");
+    migrate(db);
+
+    const repository = new SqliteScheduleRepository(db);
+
+    await repository.savePendingProposal({
+      id: "proposal_repo",
+      reason: "manual",
+      generatedAt: "2026-04-27T00:00:00.000Z",
+      horizonStart: "2026-04-27",
+      horizonEnd: "2026-05-03",
+      slices: [],
+      riskFlags: ["task_1:insufficient_capacity_before_due_date"],
+      summary: {
+        riskFlags: ["task_1:insufficient_capacity_before_due_date"],
+        unscheduledTaskIds: ["task_1"],
+        capacityPressureByDate: {
+          "2026-04-27": 120,
+        },
+      },
+    });
+
+    const loaded = await repository.findById("proposal_repo");
+
+    expect(loaded?.summary).toEqual({
+      riskFlags: ["task_1:insufficient_capacity_before_due_date"],
+      unscheduledTaskIds: ["task_1"],
+      capacityPressureByDate: {
+        "2026-04-27": 120,
+      },
+    });
   });
 
   it("loads migrations independently of the current working directory", () => {

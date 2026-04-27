@@ -11,8 +11,13 @@ export class SqliteScheduleRepository {
     horizonEnd: string;
     slices: Array<{ taskId: string; date: string; plannedMinutes: number; kind: string }>;
     riskFlags: string[];
+    summary: {
+      riskFlags: string[];
+      unscheduledTaskIds: string[];
+      capacityPressureByDate: Record<string, number>;
+    };
   }): Promise<void> {
-    const summaryJson = JSON.stringify({ riskFlags: proposal.riskFlags });
+    const summaryJson = JSON.stringify(proposal.summary);
     const insertProposal = this.db.prepare(
       `
         INSERT INTO schedule_proposals (

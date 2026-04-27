@@ -9,9 +9,9 @@ export class SqliteTaskRepository {
       .prepare(
         `
           INSERT INTO tasks (
-            id, title, notes, status, remaining_minutes, due_date, urgency, created_at, updated_at
+            id, title, notes, status, remaining_minutes, due_date, urgency, task_type, energy, created_at, updated_at
           ) VALUES (
-            @id, @title, @notes, @status, @remainingMinutes, @dueDate, @urgency, @createdAt, @updatedAt
+            @id, @title, @notes, @status, @remainingMinutes, @dueDate, @urgency, @taskType, @energy, @createdAt, @updatedAt
           )
           ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
@@ -20,6 +20,8 @@ export class SqliteTaskRepository {
             remaining_minutes = excluded.remaining_minutes,
             due_date = excluded.due_date,
             urgency = excluded.urgency,
+            task_type = excluded.task_type,
+            energy = excluded.energy,
             updated_at = excluded.updated_at
         `,
       )
@@ -43,6 +45,8 @@ export class SqliteTaskRepository {
       remainingMinutes: Number(row.remaining_minutes),
       dueDate: row.due_date ? String(row.due_date) : null,
       urgency: row.urgency as Task["urgency"],
+      taskType: row.task_type as Task["taskType"],
+      energy: row.energy as Task["energy"],
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     };
@@ -68,6 +72,8 @@ export class SqliteTaskRepository {
       remainingMinutes: Number(row.remaining_minutes),
       dueDate: row.due_date ? String(row.due_date) : null,
       urgency: row.urgency as Task["urgency"],
+      taskType: row.task_type as Task["taskType"],
+      energy: row.energy as Task["energy"],
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));
@@ -86,6 +92,8 @@ export class SqliteTaskRepository {
       remainingMinutes: Number(row.remaining_minutes),
       dueDate: row.due_date ? String(row.due_date) : null,
       urgency: row.urgency as Task["urgency"],
+      taskType: row.task_type as Task["taskType"],
+      energy: row.energy as Task["energy"],
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }));

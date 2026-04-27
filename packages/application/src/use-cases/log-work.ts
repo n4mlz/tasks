@@ -7,6 +7,7 @@ import type {
   TaskRepository,
   WorkLogRepository,
 } from "../ports";
+import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
 
 export async function logWorkUseCase(
   deps: {
@@ -47,10 +48,15 @@ export async function logWorkUseCase(
   await deps.taskRepository.save(updatedTask);
 
   const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    deps.clock.today(),
-  );
+  const horizon = selectScheduleHorizon({
+    today: deps.clock.today(),
+    tasks,
+  });
+  const capacities = expandCapacityWindow({
+    dateFrom: horizon.start,
+    dateTo: horizon.end,
+    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
+  });
   const proposal = buildScheduleProposal({
     today: deps.clock.today(),
     tasks,

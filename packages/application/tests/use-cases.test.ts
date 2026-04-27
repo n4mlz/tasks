@@ -11,9 +11,18 @@ import {
 } from "../src/index";
 
 describe("createTaskUseCase", () => {
-  it("stores a task and generates a pending proposal", async () => {
+  it("stores a task with work-shape hints and generates a pending proposal", async () => {
     const taskRepository = {
       save: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const capacityRepository = {
+      listBetween: vi.fn().mockResolvedValue([
+        { date: "2026-04-27", availableMinutes: 120, bufferMinutes: 0 },
+        { date: "2026-04-28", availableMinutes: 120, bufferMinutes: 0 },
+        { date: "2026-04-29", availableMinutes: 120, bufferMinutes: 0 },
+        { date: "2026-04-30", availableMinutes: 120, bufferMinutes: 0 },
+      ]),
     };
 
     const scheduleRepository = {
@@ -33,17 +42,30 @@ describe("createTaskUseCase", () => {
       {
         taskRepository,
         scheduleRepository,
-        capacityRepository: { listBetween: vi.fn().mockResolvedValue([]) },
+        capacityRepository,
         clock,
         idGenerator,
       },
       {
         title: "Prepare application essay",
         remainingMinutes: 180,
+        dueDate: "2026-05-01",
+        taskType: "writing",
+        energy: "high",
       },
     );
 
     expect(taskRepository.save).toHaveBeenCalledTimes(1);
+    expect(taskRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskType: "writing",
+        energy: "high",
+      }),
+    );
+    expect(capacityRepository.listBetween).toHaveBeenCalledWith(
+      "2026-04-27",
+      "2026-05-03",
+    );
     expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
   });
 });
@@ -58,6 +80,8 @@ describe("logWorkUseCase", () => {
       remainingMinutes: 120,
       dueDate: null,
       urgency: "normal" as const,
+      taskType: "implementation" as const,
+      energy: "high" as const,
       createdAt: "2026-04-27T00:00:00.000Z",
       updatedAt: "2026-04-27T00:00:00.000Z",
     };
@@ -72,15 +96,24 @@ describe("logWorkUseCase", () => {
       append: vi.fn().mockResolvedValue(undefined),
     };
 
+    const capacityRepository = {
+      listBetween: vi.fn().mockResolvedValue([
+        { date: "2026-04-27", availableMinutes: 60, bufferMinutes: 0 },
+        { date: "2026-04-28", availableMinutes: 60, bufferMinutes: 0 },
+      ]),
+    };
+
+    const scheduleRepository = {
+      savePendingProposal: vi.fn().mockResolvedValue(undefined),
+    };
+
     await expect(
       logWorkUseCase(
         {
           taskRepository,
           workLogRepository,
-          capacityRepository: { listBetween: vi.fn().mockResolvedValue([]) },
-          scheduleRepository: {
-            savePendingProposal: vi.fn().mockResolvedValue(undefined),
-          },
+          capacityRepository,
+          scheduleRepository,
           clock: {
             now: () => "2026-04-27T12:00:00.000Z",
             today: () => "2026-04-27",
@@ -95,6 +128,14 @@ describe("logWorkUseCase", () => {
         },
       ),
     ).resolves.toBeUndefined();
+
+    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.objectContaining({
+          unscheduledTaskIds: expect.any(Array),
+        }),
+      }),
+    );
   });
 });
 
@@ -102,16 +143,38 @@ describe("setCapacityUseCase", () => {
   it("stores day capacity and generates a proposal", async () => {
     const capacityRepository = {
       upsert: vi.fn().mockResolvedValue(undefined),
-      listBetween: vi.fn().mockResolvedValue([]),
+      listBetween: vi.fn().mockResolvedValue([
+        { date: "2026-04-27", availableMinutes: 180, bufferMinutes: 30 },
+        { date: "2026-04-28", availableMinutes: 240, bufferMinutes: 60 },
+        { date: "2026-04-29", availableMinutes: 240, bufferMinutes: 60 },
+      ]),
+    };
+
+    const scheduleRepository = {
+      savePendingProposal: vi.fn().mockResolvedValue(undefined),
     };
 
     await setCapacityUseCase(
       {
         capacityRepository,
-        taskRepository: { listSchedulable: vi.fn().mockResolvedValue([]) },
-        scheduleRepository: {
-          savePendingProposal: vi.fn().mockResolvedValue(undefined),
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([
+            {
+              id: "task_cap",
+              title: "Deep work",
+              notes: "",
+              status: "active" as const,
+              remainingMinutes: 180,
+              dueDate: "2026-04-30",
+              urgency: "normal" as const,
+              taskType: "deep" as const,
+              energy: "high" as const,
+              createdAt: "2026-04-27T00:00:00.000Z",
+              updatedAt: "2026-04-27T00:00:00.000Z",
+            },
+          ]),
         },
+        scheduleRepository,
         clock: {
           now: () => "2026-04-27T10:00:00.000Z",
           today: () => "2026-04-27",
@@ -126,6 +189,15 @@ describe("setCapacityUseCase", () => {
     );
 
     expect(capacityRepository.upsert).toHaveBeenCalledTimes(1);
+    expect(capacityRepository.listBetween).toHaveBeenCalledWith(
+      "2026-04-27",
+      "2026-05-03",
+    );
+    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        horizonEnd: "2026-05-03",
+      }),
+    );
   });
 });
 
@@ -139,6 +211,8 @@ describe("updateTaskUseCase", () => {
       remainingMinutes: 90,
       dueDate: null,
       urgency: "normal" as const,
+      taskType: "unknown" as const,
+      energy: "unknown" as const,
       createdAt: "2026-04-27T00:00:00.000Z",
       updatedAt: "2026-04-27T00:00:00.000Z",
     };
@@ -229,6 +303,8 @@ describe("generateScheduleProposalUseCase", () => {
         remainingMinutes: 120,
         dueDate: null,
         urgency: "normal" as const,
+        taskType: "unknown" as const,
+        energy: "unknown" as const,
         createdAt: "2026-04-27T00:00:00.000Z",
         updatedAt: "2026-04-27T00:00:00.000Z",
       },
