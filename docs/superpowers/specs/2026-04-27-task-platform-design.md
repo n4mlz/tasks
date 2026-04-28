@@ -18,6 +18,12 @@ This revision extends the original MVP design in four ways:
 - task properties must support lightweight work-shape hints for better scheduling
 - the UI must become a modern personal dashboard rather than an unstyled technical placeholder
 
+This follow-up revision extends that design in three additional ways:
+
+- capacity planning must be driven by arbitrary date input rather than a fixed current-week-only surface
+- the system must expose planning-health warnings when capacity entries are missing within the next 7 days
+- the Today view must behave as a true daily execution surface rather than a generic schedule dump
+
 ## Goals
 
 - Let the user offload tasks into an inbox instead of holding them in working memory.
@@ -92,6 +98,7 @@ Implements use cases such as:
 - approve proposal
 - reject proposal
 - get metrics
+- get planning health
 
 #### Domain Layer
 
@@ -270,6 +277,24 @@ Each proposal must summarize:
 
 The summary must be sufficiently readable for both UI rendering and MCP summarization.
 
+## Planning Health
+
+The system needs a lightweight planning-health model so both Web UI and MCP clients can detect when the planning surface is incomplete even before scheduling quality is evaluated.
+
+Planning health must include:
+
+- `missingCapacityDatesWithin7Days`
+- `warningCount`
+
+Rules:
+
+- the check window is always `today..today+6`
+- if any date in that window has no stored capacity row, that date appears in `missingCapacityDatesWithin7Days`
+- this warning is independent of whether schedulable tasks currently exist
+- missing capacity continues to behave as zero-capacity for scheduling, but it must also surface as a warning
+
+The purpose is to let both the human and the agent notice that planning confidence is degraded because the near-term capacity envelope is incomplete.
+
 ## Web UI
 
 The UI direction is a modern personal dashboard, not a dense enterprise CRUD screen and not a calendar-only surface.
@@ -291,11 +316,12 @@ Purpose:
 
 Must support:
 
-- viewing today's slices
+- viewing only slices scheduled for the current date
 - seeing the active proposal/source plan
 - entering `spentMinutes`
 - entering `remainingMinutesAfter`
 - optional work-log note
+- seeing a lightweight planning-health warning when near-term capacities are missing
 
 ### Inbox
 
@@ -319,9 +345,14 @@ Purpose:
 
 Must support:
 
+- a `referenceDate`-driven view rather than a fixed current-week-only screen
+- a 7-day window anchored to the selected reference date
+- direct arbitrary-date jump
+- previous / today / next navigation for quick movement
 - editing `availableMinutes` and `bufferMinutes` per date
 - seeing a week-scale view of capacity entries
 - seeing metrics and pressure signals
+- seeing warning banners for missing capacity dates within the next 7 days
 
 ### Proposals
 
@@ -346,6 +377,7 @@ The MCP server should continue exposing the current capability categories:
 - capacity operations
 - schedule operations
 - metrics operations
+- planning health operations
 
 The contract must be extended to support new task attributes and richer proposal summaries.
 
@@ -356,6 +388,7 @@ Expected usage patterns:
 - agent generates proposals
 - agent summarizes proposal risk
 - agent reads metrics for daily or weekly coaching
+- agent reads planning-health warnings to detect missing near-term capacities
 - human approves the final plan
 
 This preserves a clean split:
@@ -375,6 +408,8 @@ The current minimal metrics remain valid:
 - pending proposal count
 
 This revision also expects the backend to support week-level evaluation more naturally, even if the first implementation remains compact.
+
+Planning health remains separate from metrics. Metrics describe observed progress and schedule state, while planning health describes whether the near-term capacity input is sufficiently complete for the plan to be trustworthy.
 
 ## Data Ownership Model
 
@@ -402,9 +437,11 @@ The design is considered satisfied when:
 
 - users can enter and edit task and capacity data through the Web UI
 - users can log work from the Today view
+- Today shows only current-day execution items
 - schedule proposals cover a real multi-day horizon
 - proposals expose enough detail to understand risk and missing allocations
 - MCP tools support the same enhanced model
 - metrics remain accessible for agents and UI
+- planning-health warnings are accessible from both Web UI and MCP
 - the UI is intentionally styled for day-to-day human use
 - documentation no longer contains leaked local absolute paths
