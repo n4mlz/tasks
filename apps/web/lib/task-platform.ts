@@ -27,6 +27,15 @@ type TaskPlatform = {
     remainingMinutes: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?:
+      | "deep"
+      | "shallow"
+      | "admin"
+      | "research"
+      | "writing"
+      | "implementation"
+      | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
     notes?: string;
   }) => Promise<void>;
   logWork: (input: {
@@ -49,6 +58,15 @@ type TaskPlatform = {
     remainingMinutes?: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?:
+      | "deep"
+      | "shallow"
+      | "admin"
+      | "research"
+      | "writing"
+      | "implementation"
+      | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   }) => Promise<void>;

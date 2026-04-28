@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
 
+async function readTaskPayload(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return request.json();
+  }
+
+  const formData = await request.formData();
+  return Object.fromEntries(formData.entries());
+}
+
 export async function POST(request: Request) {
-  const json = await request.json();
+  const json = await readTaskPayload(request);
   const parsed = {
     title: String(json.title ?? ""),
     remainingMinutes: Number(json.remainingMinutes),
-    dueDate: typeof json.dueDate === "string" ? json.dueDate : undefined,
+    dueDate: typeof json.dueDate === "string" && json.dueDate ? json.dueDate : undefined,
     urgency: json.urgency,
+    taskType: json.taskType,
+    energy: json.energy,
     notes: typeof json.notes === "string" ? json.notes : undefined,
   };
 
@@ -16,6 +28,10 @@ export async function POST(request: Request) {
   }
 
   await taskPlatform.createTask(parsed);
+
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+    return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

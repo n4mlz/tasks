@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
 
 export async function POST(request: Request) {
-  const json = await request.json();
+  const contentType = request.headers.get("content-type") ?? "";
+  const json = contentType.includes("application/json")
+    ? await request.json()
+    : Object.fromEntries((await request.formData()).entries());
   const parsed = {
     date: String(json.date ?? ""),
     availableMinutes: Number(json.availableMinutes),
@@ -21,6 +24,10 @@ export async function POST(request: Request) {
   }
 
   await taskPlatform.setCapacity(parsed);
+
+  if (!contentType.includes("application/json")) {
+    return NextResponse.redirect(new URL("/week", request.url), { status: 303 });
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

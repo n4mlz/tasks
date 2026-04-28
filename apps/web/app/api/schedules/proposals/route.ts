@@ -10,7 +10,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const json = await request.json();
+  const contentType = request.headers.get("content-type") ?? "";
+  const json = contentType.includes("application/json")
+    ? await request.json()
+    : Object.fromEntries((await request.formData()).entries());
   await taskPlatform.generateSchedule({
     reason:
       json.reason === "task_created" ||
@@ -20,6 +23,10 @@ export async function POST(request: Request) {
         ? json.reason
         : "manual",
   });
+
+  if (!contentType.includes("application/json")) {
+    return NextResponse.redirect(new URL("/proposals", request.url), { status: 303 });
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

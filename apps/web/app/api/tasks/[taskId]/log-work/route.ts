@@ -6,7 +6,10 @@ export async function POST(
   context: { params: Promise<{ taskId: string }> },
 ) {
   const params = await context.params;
-  const json = await request.json();
+  const contentType = request.headers.get("content-type") ?? "";
+  const json = contentType.includes("application/json")
+    ? await request.json()
+    : Object.fromEntries((await request.formData()).entries());
   const parsed = {
     taskId: params.taskId,
     date: String(json.date ?? ""),
@@ -27,6 +30,10 @@ export async function POST(
   }
 
   await taskPlatform.logWork(parsed);
+
+  if (!contentType.includes("application/json")) {
+    return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

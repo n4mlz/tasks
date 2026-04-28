@@ -3,45 +3,121 @@ import { taskPlatform } from "../../lib/task-platform";
 
 export const dynamic = "force-dynamic";
 
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
 export default async function WeekPage() {
   const today = new Date().toISOString().slice(0, 10);
-  const capacities = (await taskPlatform.getCapacities(today, today)) as Array<{
+  const weekEnd = addDays(today, 6);
+  const capacities = (await taskPlatform.getCapacities(today, weekEnd)) as Array<{
     date: string;
     availableMinutes: number;
     bufferMinutes: number;
   }>;
-  const metrics = (await taskPlatform.getMetrics(today, today)) as {
+  const metrics = (await taskPlatform.getMetrics(today, weekEnd)) as {
     plannedMinutes: number;
     actualMinutes: number;
     completedMinutes: number;
     atRiskTaskCount: number;
     pendingProposalCount: number;
   };
+  const capacityMap = new Map(capacities.map((capacity) => [capacity.date, capacity]));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(today, index);
+    return (
+      capacityMap.get(date) ?? {
+        date,
+        availableMinutes: 0,
+        bufferMinutes: 0,
+      }
+    );
+  });
 
   return (
-    <section>
-      <h1>Week</h1>
-      <p>Adjust daily capacity and inspect near-term load.</p>
-      <p>
-        Planned: {metrics.plannedMinutes} / Actual: {metrics.actualMinutes} / Completed:{" "}
-        {metrics.completedMinutes}
-      </p>
-      <p>
-        At-risk tasks: {metrics.atRiskTaskCount} / Pending proposals:{" "}
-        {metrics.pendingProposalCount}
-      </p>
-      <ul>
-        {capacities.length === 0 ? (
-          <li>No capacity entries yet.</li>
-        ) : (
-          capacities.map((capacity) => (
-            <li key={capacity.date}>
-              {capacity.date}: {capacity.availableMinutes} available / {capacity.bufferMinutes}{" "}
-              buffer
-            </li>
-          ))
-        )}
-      </ul>
+    <section style={{ display: "grid", gap: 20 }}>
+      <div
+        style={{
+          display: "grid",
+          gap: 10,
+          padding: 20,
+          borderRadius: 24,
+          background: "rgba(255,255,255,0.9)",
+          border: "1px solid rgba(23, 32, 51, 0.08)",
+        }}
+      >
+        <h2 style={{ margin: 0 }}>Week</h2>
+        <p style={{ margin: 0, color: "#5a6475" }}>
+          Shape your week first, then let the proposal layer decide what fits where.
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {[
+            ["Planned", metrics.plannedMinutes],
+            ["Actual", metrics.actualMinutes],
+            ["Completed", metrics.completedMinutes],
+            ["At-risk tasks", metrics.atRiskTaskCount],
+            ["Pending proposals", metrics.pendingProposalCount],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              style={{
+                padding: 14,
+                borderRadius: 18,
+                background: "#f7f4ee",
+              }}
+            >
+              <p style={{ margin: 0, color: "#7c5c2b", fontSize: 13 }}>{label}</p>
+              <p style={{ margin: "6px 0 0", fontSize: 24, fontWeight: 700 }}>{value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 14 }}>
+        {days.map((capacity) => (
+          <article
+            key={capacity.date}
+            style={{
+              padding: 18,
+              borderRadius: 18,
+              background: "rgba(255,255,255,0.88)",
+              border: "1px solid rgba(23, 32, 51, 0.08)",
+            }}
+          >
+            <form action="/api/capacity" method="post" style={{ display: "grid", gap: 10 }}>
+              <input name="date" type="hidden" value={capacity.date} />
+              <h3 style={{ margin: 0 }}>{capacity.date}</h3>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>Available minutes</span>
+                <input
+                  defaultValue={capacity.availableMinutes}
+                  min="0"
+                  name="availableMinutes"
+                  type="number"
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>Buffer minutes</span>
+                <input
+                  defaultValue={capacity.bufferMinutes}
+                  min="0"
+                  name="bufferMinutes"
+                  type="number"
+                />
+              </label>
+              <button type="submit">Save capacity</button>
+            </form>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
