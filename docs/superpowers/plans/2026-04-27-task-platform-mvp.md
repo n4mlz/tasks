@@ -579,6 +579,277 @@ git commit -m "fix: finalize task platform upgrade"
 
 Only do this if verification uncovered a final small integration fix.
 
+## Task 7: Add Planning-Health Warnings In The Application Layer
+
+**Files:**
+- Modify: `packages/application/src/index.ts`
+- Modify: `packages/application/src/ports.ts`
+- Create: `packages/application/src/use-cases/get-planning-health.ts`
+- Modify: `packages/application/tests/use-cases.test.ts`
+- Modify: `packages/infrastructure/src/sqlite-metrics-repository.ts`
+- Test: `packages/infrastructure/tests/sqlite-repositories.test.ts`
+
+- [ ] **Step 1: Write failing tests for planning-health warnings**
+
+Add use-case tests covering:
+
+```ts
+it("reports missing capacity dates within the next 7 days", async () => {
+  const result = await getPlanningHealthUseCase(
+    {
+      capacityRepository: {
+        listBetween: async () => [
+          createDayCapacity({ date: "2026-04-28", availableMinutes: 180, bufferMinutes: 30 }),
+          createDayCapacity({ date: "2026-04-30", availableMinutes: 120, bufferMinutes: 20 }),
+        ],
+      },
+      clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
+    },
+    {},
+  );
+
+  expect(result.missingCapacityDatesWithin7Days).toEqual([
+    "2026-04-29",
+    "2026-05-01",
+    "2026-05-02",
+    "2026-05-03",
+    "2026-05-04",
+  ]);
+  expect(result.warningCount).toBe(5);
+});
+```
+
+```ts
+it("returns no planning-health warnings when all 7 days are configured", async () => {
+  const result = await getPlanningHealthUseCase(
+    {
+      capacityRepository: {
+        listBetween: async () =>
+          Array.from({ length: 7 }, (_, offset) =>
+            createDayCapacity({
+              date: addDays("2026-04-28", offset),
+              availableMinutes: 120,
+              bufferMinutes: 20,
+            }),
+          ),
+      },
+      clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
+    },
+    {},
+  );
+
+  expect(result.missingCapacityDatesWithin7Days).toEqual([]);
+  expect(result.warningCount).toBe(0);
+});
+```
+
+- [ ] **Step 2: Run the application tests and verify they fail**
+
+Run: `pnpm test -- packages/application/tests/use-cases.test.ts`
+
+Expected: FAIL because planning-health use cases and types do not exist yet.
+
+- [ ] **Step 3: Implement planning-health calculation**
+
+Add `packages/application/src/use-cases/get-planning-health.ts` with:
+
+- a 7-day window from `clock.today()`
+- a `listBetween(today, today+6)` read
+- a return shape:
+
+```ts
+{
+  missingCapacityDatesWithin7Days: string[];
+  warningCount: number;
+}
+```
+
+Export it from `packages/application/src/index.ts`.
+
+- [ ] **Step 4: Wire repository typings and repository verification**
+
+Update `packages/application/src/ports.ts` and infrastructure-facing tests as needed so the use case can read capacities without depending on Web-specific logic.
+
+If the infrastructure test suite already covers `listBetween`, extend it only enough to prove missing dates remain absent from the repository result and are derived in the use case, not synthesized by storage.
+
+- [ ] **Step 5: Re-run the focused tests and verify they pass**
+
+Run:
+
+```bash
+pnpm test -- packages/application/tests/use-cases.test.ts packages/infrastructure/tests/sqlite-repositories.test.ts
+```
+
+Expected: PASS
+
+- [ ] **Step 6: Commit the planning-health application layer**
+
+```bash
+git add packages/application/src/index.ts packages/application/src/ports.ts packages/application/src/use-cases/get-planning-health.ts packages/application/tests/use-cases.test.ts packages/infrastructure/src/sqlite-metrics-repository.ts packages/infrastructure/tests/sqlite-repositories.test.ts
+git commit -m "feat: add planning health warnings"
+```
+
+## Task 8: Refine The Web UI Around Daily Execution And Arbitrary-Date Planning
+
+**Files:**
+- Modify: `apps/web/app/page.tsx`
+- Modify: `apps/web/app/week/page.tsx`
+- Modify: `apps/web/app/layout.tsx`
+- Modify: `apps/web/lib/task-platform.ts`
+- Modify: `apps/web/tests/ui.test.tsx`
+- Modify: `apps/web/tests/flows.test.tsx`
+
+- [ ] **Step 1: Write failing Web tests for daily filtering and planning-health warnings**
+
+Add tests covering:
+
+- Today only renders slices whose `date` equals today
+- Today renders a warning banner when planning health reports missing dates
+- Week accepts a `referenceDate` search param
+- Week renders navigation for `previous`, `today`, `next`
+- Week renders an arbitrary-date jump input
+- Week renders missing-capacity warnings for the next 7 days
+
+Use a focused page-level test shape such as:
+
+```ts
+it("shows only today's slices on the Today page", async () => {
+  render(await HomePage());
+  expect(screen.getByText("Today")).toBeInTheDocument();
+  expect(screen.queryByText(/2026-05-01/)).not.toBeInTheDocument();
+});
+```
+
+- [ ] **Step 2: Run the Web tests and verify they fail**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: FAIL because Today currently renders all approved slices and Week is fixed to the current 7-day window.
+
+- [ ] **Step 3: Extend the task-platform adapter for planning health**
+
+Update `apps/web/lib/task-platform.ts` so it exposes:
+
+- `getPlanningHealth()`
+- `getCurrentSchedule()` returning enough detail for Today filtering
+- helper methods needed by a `referenceDate`-driven Week page
+
+- [ ] **Step 4: Make Today a real daily execution surface**
+
+Update `apps/web/app/page.tsx` so it:
+
+- filters approved slices to `slice.date === today`
+- keeps work-log forms attached to each visible slice
+- shows a compact planning-health warning card when `warningCount > 0`
+- keeps the information hierarchy focused on today's execution
+
+- [ ] **Step 5: Turn Week into an arbitrary-date planning surface**
+
+Update `apps/web/app/week/page.tsx` so it:
+
+- reads `referenceDate` from the query string
+- defaults to `today` when absent
+- renders a 7-day window starting from `referenceDate`
+- provides `previous`, `today`, and `next` navigation links
+- provides an arbitrary-date jump form
+- shows a warning banner listing `missingCapacityDatesWithin7Days` when present
+- preserves editable `availableMinutes` and `bufferMinutes` forms per visible day
+
+- [ ] **Step 6: Improve UX polish for daily use**
+
+Refine `apps/web/app/layout.tsx` and page structure so:
+
+- warnings are visible but not visually noisy
+- the Today page feels lighter and more focused than planning pages
+- Week navigation and date-jump controls are easy to reach on mobile
+- planning cards remain readable on desktop without collapsing into a dense table
+
+- [ ] **Step 7: Re-run the focused Web tests and verify they pass**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: PASS
+
+- [ ] **Step 8: Run a production build to verify the refined UI**
+
+Run: `timeout 60s pnpm --filter web build`
+
+Expected: PASS
+
+- [ ] **Step 9: Commit the Web UX refinement**
+
+```bash
+git add apps/web/app/page.tsx apps/web/app/week/page.tsx apps/web/app/layout.tsx apps/web/lib/task-platform.ts apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx
+git commit -m "feat: refine daily planning experience"
+```
+
+## Task 9: Expose Planning Health Through MCP And Finalize The PR Branch
+
+**Files:**
+- Modify: `apps/mcp/src/server.ts`
+- Modify: `apps/mcp/tests/server.test.ts`
+- Modify: `apps/web/app/api/schedules/proposals/route.ts`
+- Modify: `docs/superpowers/plans/2026-04-27-task-platform-mvp.md`
+
+- [ ] **Step 1: Write failing MCP tests for planning-health access**
+
+Add tests asserting that:
+
+- a `planning_health_get` tool is registered
+- the tool accepts an empty input object
+- the tool can return a shape containing `missingCapacityDatesWithin7Days` and `warningCount`
+
+- [ ] **Step 2: Run the MCP tests and verify they fail**
+
+Run: `pnpm test -- apps/mcp/tests/server.test.ts`
+
+Expected: FAIL because the MCP surface does not yet expose planning health.
+
+- [ ] **Step 3: Implement MCP planning-health access**
+
+Update `apps/mcp/src/server.ts` so the server deps include:
+
+- `getPlanningHealth(): Promise<unknown>`
+
+Register:
+
+```ts
+server.registerTool(
+  "planning_health_get",
+  {
+    description: "Read planning-health warnings such as missing near-term capacity dates.",
+    inputSchema: {},
+  },
+  async () => ({
+    content: [{ type: "text", text: JSON.stringify(await deps.getPlanningHealth()) }],
+  }),
+);
+```
+
+- [ ] **Step 4: Keep Web and MCP parity**
+
+If needed, make a small adapter update so the same planning-health use case powers both the Web app and MCP server rather than duplicating logic.
+
+- [ ] **Step 5: Re-run MCP tests and full verification**
+
+Run:
+
+```bash
+pnpm test -- apps/mcp/tests/server.test.ts
+pnpm test
+pnpm --filter mcp build
+timeout 60s pnpm --filter web build
+```
+
+Expected: PASS
+
+- [ ] **Step 6: Commit the planning-health integration**
+
+```bash
+git add apps/mcp/src/server.ts apps/mcp/tests/server.test.ts apps/web/app/api/schedules/proposals/route.ts docs/superpowers/plans/2026-04-27-task-platform-mvp.md
+git commit -m "feat: expose planning health to agents"
+```
+
 ## Self-Review
 
 Spec coverage check:
@@ -588,6 +859,9 @@ Spec coverage check:
 - Web-only routine operation: covered by Task 3
 - proposal detail and risk visibility: covered by Task 1, Task 2, and Task 3
 - MCP parity with richer model: covered by Task 4
+- planning-health warnings in Web and MCP: covered by Task 7, Task 8, and Task 9
+- arbitrary-date capacity planning UX: covered by Task 8
+- Today-only daily execution surface: covered by Task 8
 - public-doc and history cleanup: covered by Task 5
 - final verification: covered by Task 6
 
