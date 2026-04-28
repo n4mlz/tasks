@@ -43,6 +43,7 @@ export function createMcpServer(deps: {
   approveProposal(input: { proposalId: string }): Promise<void>;
   rejectProposal(input: { proposalId: string; reason?: string }): Promise<void>;
   getMetrics(input: { dateFrom?: string; dateTo?: string }): Promise<unknown>;
+  getPlanningHealth(): Promise<unknown>;
 }) {
   const server = new McpServer({
     name: "task-platform-mcp",
@@ -222,6 +223,17 @@ export function createMcpServer(deps: {
     },
     async (input) => ({
       content: [{ type: "text", text: JSON.stringify(await deps.getMetrics(input)) }],
+    }),
+  );
+
+  server.registerTool(
+    "planning_health_get",
+    {
+      description: "Read planning-health warnings such as missing near-term capacity dates.",
+      inputSchema: {},
+    },
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(await deps.getPlanningHealth()) }],
     }),
   );
 
