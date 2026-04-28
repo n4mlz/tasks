@@ -9,6 +9,15 @@ import { z } from "zod";
 type ScheduleStatus = "pending" | "approved" | "rejected" | "superseded";
 type TaskStatus = "inbox" | "active" | "done" | "archived";
 type TaskUrgency = "today" | "soon" | "normal";
+type TaskType =
+  | "deep"
+  | "shallow"
+  | "admin"
+  | "research"
+  | "writing"
+  | "implementation"
+  | "unknown";
+type TaskEnergy = "low" | "medium" | "high" | "unknown";
 
 export function createMcpServer(deps: {
   listTasks(input?: { status?: TaskStatus; dueBefore?: string; scheduledOn?: string }): Promise<unknown[]>;
@@ -19,6 +28,8 @@ export function createMcpServer(deps: {
     remainingMinutes?: number;
     dueDate?: string | null;
     urgency?: TaskUrgency;
+    taskType?: TaskType;
+    energy?: TaskEnergy;
     status?: TaskStatus;
     notes?: string;
   }): Promise<void>;
@@ -75,6 +86,10 @@ export function createMcpServer(deps: {
         remainingMinutes: z.number().int().min(0).optional(),
         dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         urgency: z.enum(["today", "soon", "normal"]).optional(),
+        taskType: z
+          .enum(["deep", "shallow", "admin", "research", "writing", "implementation", "unknown"])
+          .optional(),
+        energy: z.enum(["low", "medium", "high", "unknown"]).optional(),
         status: z.enum(["inbox", "active", "done", "archived"]).optional(),
         notes: z.string().optional(),
       },
