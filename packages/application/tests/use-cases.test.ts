@@ -3,12 +3,20 @@ import {
   approveProposalUseCase,
   createTaskUseCase,
   generateScheduleProposalUseCase,
+  getPlanningHealthUseCase,
   getMetricsUseCase,
   logWorkUseCase,
   rejectProposalUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
 } from "../src/index";
+import { createDayCapacity } from "@task-platform/domain";
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
 
 describe("createTaskUseCase", () => {
   it("stores a task with work-shape hints and generates a pending proposal", async () => {
@@ -350,5 +358,53 @@ describe("getMetricsUseCase", () => {
     );
 
     expect(result.actualMinutes).toBe(240);
+  });
+});
+
+describe("getPlanningHealthUseCase", () => {
+  it("reports missing capacity dates within the next 7 days", async () => {
+    const result = await getPlanningHealthUseCase(
+      {
+        capacityRepository: {
+          listBetween: async () => [
+            createDayCapacity({ date: "2026-04-28", availableMinutes: 180, bufferMinutes: 30 }),
+            createDayCapacity({ date: "2026-04-30", availableMinutes: 120, bufferMinutes: 20 }),
+          ],
+        },
+        clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
+      },
+      {},
+    );
+
+    expect(result.missingCapacityDatesWithin7Days).toEqual([
+      "2026-04-29",
+      "2026-05-01",
+      "2026-05-02",
+      "2026-05-03",
+      "2026-05-04",
+    ]);
+    expect(result.warningCount).toBe(5);
+  });
+
+  it("returns no planning-health warnings when all 7 days are configured", async () => {
+    const result = await getPlanningHealthUseCase(
+      {
+        capacityRepository: {
+          listBetween: async () =>
+            Array.from({ length: 7 }, (_, offset) =>
+              createDayCapacity({
+                date: addDays("2026-04-28", offset),
+                availableMinutes: 120,
+                bufferMinutes: 20,
+              }),
+            ),
+        },
+        clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
+      },
+      {},
+    );
+
+    expect(result.missingCapacityDatesWithin7Days).toEqual([]);
+    expect(result.warningCount).toBe(0);
   });
 });

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  SqliteCapacityRepository,
   createDatabase,
   migrate,
   SqliteScheduleRepository,
@@ -29,6 +30,39 @@ describe("SQLite task repository", () => {
     expect(loaded?.title).toBe("Book train ticket");
     expect(loaded?.taskType).toBe("admin");
     expect(loaded?.energy).toBe("low");
+  });
+
+  it("returns only persisted capacity rows and does not synthesize missing dates", async () => {
+    const db = createDatabase(":memory:");
+    migrate(db);
+
+    const repository = new SqliteCapacityRepository(db);
+
+    await repository.upsert({
+      date: "2026-04-28",
+      availableMinutes: 180,
+      bufferMinutes: 30,
+    });
+    await repository.upsert({
+      date: "2026-04-30",
+      availableMinutes: 120,
+      bufferMinutes: 20,
+    });
+
+    const loaded = await repository.listBetween("2026-04-28", "2026-05-04");
+
+    expect(loaded).toEqual([
+      {
+        date: "2026-04-28",
+        availableMinutes: 180,
+        bufferMinutes: 30,
+      },
+      {
+        date: "2026-04-30",
+        availableMinutes: 120,
+        bufferMinutes: 20,
+      },
+    ]);
   });
 
   it("persists and reloads proposal summary details", async () => {

@@ -8,3 +8,4 @@ export { generateScheduleProposalUseCase } from "./use-cases/generate-schedule-p
 export { approveProposalUseCase } from "./use-cases/approve-proposal";
 export { rejectProposalUseCase } from "./use-cases/reject-proposal";
 export { getMetricsUseCase } from "./use-cases/get-metrics";
+export { getPlanningHealthUseCase } from "./use-cases/get-planning-health";
