@@ -9,24 +9,32 @@ function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-export default async function WeekPage() {
+export default async function WeekPage(props: {
+  searchParams?: Promise<{ referenceDate?: string }>;
+} = {}) {
   const today = new Date().toISOString().slice(0, 10);
-  const weekEnd = addDays(today, 6);
-  const capacities = (await taskPlatform.getCapacities(today, weekEnd)) as Array<{
+  const searchParams = (await props.searchParams) ?? {};
+  const referenceDate = searchParams.referenceDate || today;
+  const weekEnd = addDays(referenceDate, 6);
+  const capacities = (await taskPlatform.getCapacities(referenceDate, weekEnd)) as Array<{
     date: string;
     availableMinutes: number;
     bufferMinutes: number;
   }>;
-  const metrics = (await taskPlatform.getMetrics(today, weekEnd)) as {
+  const metrics = (await taskPlatform.getMetrics(referenceDate, weekEnd)) as {
     plannedMinutes: number;
     actualMinutes: number;
     completedMinutes: number;
     atRiskTaskCount: number;
     pendingProposalCount: number;
   };
+  const planningHealth = (await taskPlatform.getPlanningHealth()) as {
+    missingCapacityDatesWithin7Days: string[];
+    warningCount: number;
+  };
   const capacityMap = new Map(capacities.map((capacity) => [capacity.date, capacity]));
   const days = Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(today, index);
+    const date = addDays(referenceDate, index);
     return (
       capacityMap.get(date) ?? {
         date,
@@ -52,6 +60,27 @@ export default async function WeekPage() {
         <p style={{ margin: 0, color: "#5a6475" }}>
           Shape your week first, then let the proposal layer decide what fits where.
         </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <a href={`/week?referenceDate=${addDays(referenceDate, -7)}`}>Previous</a>
+          <a href={`/week?referenceDate=${today}`}>Today</a>
+          <a href={`/week?referenceDate=${addDays(referenceDate, 7)}`}>Next</a>
+          <form action="/week" method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <label
+              style={{ display: "grid", gap: 4, minWidth: 180, color: "#5a6475", fontSize: 14 }}
+            >
+              <span>Reference date</span>
+              <input defaultValue={referenceDate} name="referenceDate" type="date" />
+            </label>
+            <button type="submit">Jump</button>
+          </form>
+        </div>
         <div
           style={{
             display: "grid",
@@ -80,6 +109,26 @@ export default async function WeekPage() {
           ))}
         </div>
       </div>
+
+      {planningHealth.warningCount > 0 ? (
+        <article
+          style={{
+            display: "grid",
+            gap: 8,
+            padding: 16,
+            borderRadius: 18,
+            background: "rgba(250, 236, 210, 0.95)",
+            border: "1px solid rgba(213, 143, 54, 0.28)",
+            color: "#5f4318",
+          }}
+        >
+          <strong>Missing capacity</strong>
+          <p style={{ margin: 0 }}>
+            Planning confidence is lower because near-term capacity is missing for:{" "}
+            {planningHealth.missingCapacityDatesWithin7Days.join(", ")}
+          </p>
+        </article>
+      ) : null}
 
       <div style={{ display: "grid", gap: 14 }}>
         {days.map((capacity) => (

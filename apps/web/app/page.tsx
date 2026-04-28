@@ -4,6 +4,7 @@ import { taskPlatform } from "../lib/task-platform";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const today = new Date().toISOString().slice(0, 10);
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeProposalId: string | null;
     slices: Array<{
@@ -13,6 +14,10 @@ export default async function HomePage() {
       kind?: string;
     }>;
   };
+  const planningHealth = (await taskPlatform.getPlanningHealth()) as {
+    missingCapacityDatesWithin7Days: string[];
+    warningCount: number;
+  };
   const tasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
     title: string;
@@ -20,6 +25,7 @@ export default async function HomePage() {
     energy?: string;
   }>;
   const taskTitles = new Map(tasks.map((task) => [task.id, task]));
+  const todaysSlices = schedule.slices.filter((slice) => slice.date === today);
 
   return (
     <section style={{ display: "grid", gap: 20 }}>
@@ -43,13 +49,33 @@ export default async function HomePage() {
         </p>
       </div>
 
+      {planningHealth.warningCount > 0 ? (
+        <article
+          style={{
+            display: "grid",
+            gap: 8,
+            padding: 16,
+            borderRadius: 18,
+            background: "rgba(250, 236, 210, 0.95)",
+            border: "1px solid rgba(213, 143, 54, 0.28)",
+            color: "#5f4318",
+          }}
+        >
+          <strong>Missing capacity</strong>
+          <p style={{ margin: 0 }}>
+            The next 7 days are not fully configured yet. Missing dates:{" "}
+            {planningHealth.missingCapacityDatesWithin7Days.join(", ")}
+          </p>
+        </article>
+      ) : null}
+
       <div
         style={{
           display: "grid",
           gap: 16,
         }}
       >
-        {schedule.slices.length === 0 ? (
+        {todaysSlices.length === 0 ? (
           <article
             style={{
               padding: 20,
@@ -58,10 +84,10 @@ export default async function HomePage() {
               border: "1px solid rgba(23, 32, 51, 0.08)",
             }}
           >
-            <p style={{ margin: 0 }}>No approved slices yet.</p>
+            <p style={{ margin: 0 }}>No approved slices for today.</p>
           </article>
         ) : (
-          schedule.slices.map((slice, index) => {
+          todaysSlices.map((slice, index) => {
             const task = taskTitles.get(slice.task_id ?? "");
             return (
               <article

@@ -5,6 +5,7 @@ import {
   createTaskUseCase,
   generateScheduleProposalUseCase,
   getMetricsUseCase,
+  getPlanningHealthUseCase,
   logWorkUseCase,
   rejectProposalUseCase,
   setCapacityUseCase,
@@ -79,6 +80,7 @@ type TaskPlatform = {
   getProposal: (proposalId: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
   getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
+  getPlanningHealth: () => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
@@ -209,6 +211,15 @@ function getTaskPlatform(): TaskPlatform {
           metricsRepository,
         },
         { dateFrom, dateTo },
+      );
+    },
+    async getPlanningHealth() {
+      return getPlanningHealthUseCase(
+        {
+          capacityRepository,
+          clock,
+        },
+        {},
       );
     },
   };

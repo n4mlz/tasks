@@ -28,6 +28,11 @@ export default function RootLayout({
               display: "grid",
               gap: 16,
               marginBottom: 24,
+              position: "sticky",
+              top: 0,
+              zIndex: 10,
+              paddingBottom: 8,
+              backdropFilter: "blur(10px)",
             }}
           >
             <div
@@ -83,6 +88,7 @@ export default function RootLayout({
                 display: "flex",
                 flexWrap: "wrap",
                 gap: 12,
+                alignItems: "center",
               }}
             >
               {[
