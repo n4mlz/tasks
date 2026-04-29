@@ -1,7 +1,27 @@
 import React from "react";
+import { Inbox, PencilLine, Sparkles } from "lucide-react";
+import { SectionHeader } from "../../components/section-header";
+import { StatusBadge } from "../../components/status-badge";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Select } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
 import { taskPlatform } from "../../lib/task-platform";
+import {
+  energyLabels,
+  formatMinutes,
+  statusLabels,
+  taskTypeLabels,
+  urgencyLabels,
+} from "../../lib/presentation";
 
 export const dynamic = "force-dynamic";
+
+const urgencyOptions = ["today", "soon", "normal"] as const;
+const taskTypeOptions = ["unknown", "deep", "shallow", "admin", "research", "writing", "implementation"] as const;
+const energyOptions = ["unknown", "low", "medium", "high"] as const;
+const statusOptions = ["inbox", "active", "done", "archived"] as const;
 
 export default async function InboxPage() {
   const tasks = (await taskPlatform.listTasks()) as Array<{
@@ -17,178 +37,209 @@ export default async function InboxPage() {
   }>;
 
   return (
-    <section style={{ display: "grid", gap: 20 }}>
-      <div
-        style={{
-          padding: 20,
-          borderRadius: 24,
-          background: "rgba(255,255,255,0.9)",
-          border: "1px solid rgba(23, 32, 51, 0.08)",
-          boxShadow: "0 16px 30px rgba(23, 32, 51, 0.06)",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Inbox</h2>
-        <p style={{ color: "#5a6475" }}>
-          Capture tasks quickly, but keep enough shape for the scheduler to place them well.
-        </p>
-        <form action="/api/tasks" method="post" style={{ display: "grid", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Title</span>
-            <input name="title" />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Remaining minutes</span>
-            <input min="1" name="remainingMinutes" type="number" />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Due date</span>
-            <input name="dueDate" type="date" />
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Urgency</span>
-            <select defaultValue="normal" name="urgency">
-              <option value="today">today</option>
-              <option value="soon">soon</option>
-              <option value="normal">normal</option>
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Task type</span>
-            <select defaultValue="unknown" name="taskType">
-              <option value="unknown">unknown</option>
-              <option value="deep">deep</option>
-              <option value="shallow">shallow</option>
-              <option value="admin">admin</option>
-              <option value="research">research</option>
-              <option value="writing">writing</option>
-              <option value="implementation">implementation</option>
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Energy</span>
-            <select defaultValue="unknown" name="energy">
-              <option value="unknown">unknown</option>
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-            </select>
-          </label>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Notes</span>
-            <textarea name="notes" rows={3} />
-          </label>
-          <button
-            style={{
-              justifySelf: "start",
-              border: 0,
-              borderRadius: 999,
-              padding: "10px 16px",
-              background: "#172033",
-              color: "#f8fafc",
-              fontWeight: 700,
-            }}
-            type="submit"
-          >
-            Add task
-          </button>
-        </form>
-      </div>
-      <div style={{ display: "grid", gap: 16 }}>
-        {tasks.length === 0 ? (
-          <article
-            style={{
-              padding: 18,
-              borderRadius: 18,
-              background: "rgba(255,255,255,0.85)",
-            }}
-          >
-            No tasks yet.
-          </article>
-        ) : (
-          tasks.map((task) => (
-            <article
-              key={task.id}
-              style={{
-                padding: 18,
-                borderRadius: 18,
-                background: "rgba(255,255,255,0.88)",
-                border: "1px solid rgba(23, 32, 51, 0.08)",
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              <div>
-                <h3 style={{ margin: 0 }}>{task.title}</h3>
-                <p style={{ margin: "6px 0 0", color: "#5a6475" }}>
-                  {task.remainingMinutes} min · {task.status}
-                  {task.dueDate ? ` · due ${task.dueDate}` : ""}
-                </p>
+    <section className="grid gap-6">
+      <Card className="border-white/70 bg-white/92 shadow-[0_20px_70px_rgba(15,23,42,0.08)]">
+        <CardContent className="grid gap-6 p-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <SectionHeader
+            eyebrow="受信箱"
+            title="思いついた task をここに集める"
+            description="最小限の入力で task を投げ込み、必要なら属性を補います。締切と残り時間があるだけでも、提案層がかなり働けます。"
+          />
+          <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4">
+            <div className="flex items-center gap-2 text-slate-900">
+              <Sparkles className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-semibold">理想運用</span>
+            </div>
+            <p className="text-sm leading-6 text-slate-600">
+              まずはタイトルと残り時間、必要なら期限だけ入れて受け止めます。後から Hermes などの agent が task
+              type や energy を補っても構いません。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <Card className="border-white/80 bg-white/94 shadow-[0_16px_52px_rgba(15,23,42,0.06)]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl tracking-[-0.03em]">
+              <Inbox className="h-5 w-5 text-amber-600" />
+              新しい task を追加
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form action="/api/tasks" className="grid gap-4" method="post">
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                タイトル
+                <Input name="title" />
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  残り時間
+                  <Input min="1" name="remainingMinutes" type="number" />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  期限
+                  <Input name="dueDate" type="date" />
+                </label>
               </div>
-              <form
-                action={`/api/tasks/${task.id}`}
-                method="post"
-                style={{ display: "grid", gap: 10 }}
+              <div className="grid gap-4 md:grid-cols-3">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  緊急度
+                  <Select defaultValue="normal" name="urgency">
+                    {urgencyOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {urgencyLabels[option]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  task 種別
+                  <Select defaultValue="unknown" name="taskType">
+                    {taskTypeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {taskTypeLabels[option]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  energy
+                  <Select defaultValue="unknown" name="energy">
+                    {energyOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {energyLabels[option]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+              </div>
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                メモ
+                <Textarea name="notes" rows={4} />
+              </label>
+              <Button className="justify-self-start" type="submit">
+                task を追加する
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4">
+          <SectionHeader
+            compact
+            title="既存 task の軽編集"
+            description="inbox のままでも active に移した後でも、期限・残り時間・属性をここで手早く更新できます。"
+          />
+
+          {tasks.length === 0 ? (
+            <Card className="border-dashed border-slate-300/90 bg-white/90">
+              <CardContent className="p-6 text-sm leading-6 text-slate-600">
+                task はまだありません。上のフォームから追加すると、ここに編集カードが並びます。
+              </CardContent>
+            </Card>
+          ) : (
+            tasks.map((task) => (
+              <Card
+                key={task.id}
+                className="border-white/80 bg-white/94 shadow-[0_12px_40px_rgba(15,23,42,0.06)]"
               >
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Title</span>
-                  <input defaultValue={task.title} name="title" />
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Remaining minutes</span>
-                  <input
-                    defaultValue={task.remainingMinutes}
-                    min="0"
-                    name="remainingMinutes"
-                    type="number"
-                  />
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Due date</span>
-                  <input defaultValue={task.dueDate ?? ""} name="dueDate" type="date" />
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Urgency</span>
-                  <select defaultValue={task.urgency ?? "normal"} name="urgency">
-                    <option value="today">today</option>
-                    <option value="soon">soon</option>
-                    <option value="normal">normal</option>
-                  </select>
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Task type</span>
-                  <select defaultValue={task.taskType ?? "unknown"} name="taskType">
-                    <option value="unknown">unknown</option>
-                    <option value="deep">deep</option>
-                    <option value="shallow">shallow</option>
-                    <option value="admin">admin</option>
-                    <option value="research">research</option>
-                    <option value="writing">writing</option>
-                    <option value="implementation">implementation</option>
-                  </select>
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Energy</span>
-                  <select defaultValue={task.energy ?? "unknown"} name="energy">
-                    <option value="unknown">unknown</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </label>
-                <label style={{ display: "grid", gap: 6 }}>
-                  <span>Status</span>
-                  <select defaultValue={task.status} name="status">
-                    <option value="inbox">inbox</option>
-                    <option value="active">active</option>
-                    <option value="done">done</option>
-                    <option value="archived">archived</option>
-                  </select>
-                </label>
-                <button type="submit">Save task</button>
-              </form>
-            </article>
-          ))
-        )}
+                <CardHeader className="gap-3 pb-0">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-2">
+                      <CardTitle className="text-lg tracking-[-0.03em]">{task.title}</CardTitle>
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge>{formatMinutes(task.remainingMinutes)}</StatusBadge>
+                        <StatusBadge tone="secondary">{statusLabels[task.status] ?? task.status}</StatusBadge>
+                        <StatusBadge tone="outline">
+                          {task.dueDate ? `期限 ${task.dueDate}` : "期限なし"}
+                        </StatusBadge>
+                        <StatusBadge tone="outline">
+                          {urgencyLabels[task.urgency ?? "normal"] ?? "通常"}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                    <PencilLine className="h-5 w-5 text-slate-400" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-5">
+                  <form action={`/api/tasks/${task.id}`} className="grid gap-4" method="post">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        タイトル
+                        <Input defaultValue={task.title} name="title" />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        残り時間
+                        <Input
+                          defaultValue={task.remainingMinutes}
+                          min="0"
+                          name="remainingMinutes"
+                          type="number"
+                        />
+                      </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        期限
+                        <Input defaultValue={task.dueDate ?? ""} name="dueDate" type="date" />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        緊急度
+                        <Select defaultValue={task.urgency ?? "normal"} name="urgency">
+                          {urgencyOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {urgencyLabels[option]}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        task 種別
+                        <Select defaultValue={task.taskType ?? "unknown"} name="taskType">
+                          {taskTypeOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {taskTypeLabels[option]}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        energy
+                        <Select defaultValue={task.energy ?? "unknown"} name="energy">
+                          {energyOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {energyLabels[option]}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        メモ
+                        <Textarea defaultValue={task.notes ?? ""} name="notes" rows={3} />
+                      </label>
+                      <label className="grid gap-2 text-sm font-medium text-slate-700">
+                        状態
+                        <Select defaultValue={task.status} name="status">
+                          {statusOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {statusLabels[option]}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    </div>
+                    <Button className="justify-self-start" type="submit" variant="secondary">
+                      task を更新する
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
     </section>
   );

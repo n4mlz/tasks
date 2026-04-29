@@ -50,9 +50,9 @@ describe("Inbox flow", () => {
   it("renders task fields for planning inputs", async () => {
     render(await InboxPage());
 
-    expect(screen.getByLabelText("Title")).toBeInTheDocument();
-    expect(screen.getByLabelText("Remaining minutes")).toBeInTheDocument();
-    expect(screen.getByLabelText("Due date")).toBeInTheDocument();
+    expect(screen.getByLabelText("タイトル")).toBeInTheDocument();
+    expect(screen.getByLabelText("残り時間")).toBeInTheDocument();
+    expect(screen.getByLabelText("期限")).toBeInTheDocument();
   });
 
   it("renders week planning actions", async () => {
@@ -62,7 +62,7 @@ describe("Inbox flow", () => {
 
     render(await WeekPageWithProps({ searchParams: Promise.resolve({ referenceDate: "2026-05-02" }) }));
 
-    expect(screen.getAllByRole("button", { name: "Save capacity" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Jump" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "保存" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "この日付へ移動" })).toBeInTheDocument();
   });
 });

@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+:root {
+  --background: 210 20% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --muted: 210 16% 93%;
+  --muted-foreground: 215 16% 40%;
+  --border: 214 20% 86%;
+  --input: 214 20% 86%;
+  --ring: 217 91% 60%;
+  --primary: 221 39% 11%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 16% 93%;
+  --secondary-foreground: 222 47% 11%;
+  --accent: 36 88% 54%;
+  --accent-foreground: 26 83% 14%;
+  --success: 160 84% 29%;
+  --success-foreground: 155 65% 96%;
+  --warning: 35 92% 51%;
+  --warning-foreground: 26 83% 14%;
+  --danger: 0 72% 51%;
+  --danger-foreground: 0 86% 97%;
+  --radius: 0.9rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.16), transparent 28%),
+    linear-gradient(180deg, hsl(210 20% 98%), hsl(210 18% 96%));
+  color: hsl(var(--foreground));
+  font-family:
+    "IBM Plex Sans", "Avenir Next", "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.24);
+}
