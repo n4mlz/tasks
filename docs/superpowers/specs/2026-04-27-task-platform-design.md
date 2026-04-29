@@ -18,11 +18,12 @@ This revision extends the original MVP design in four ways:
 - task properties must support lightweight work-shape hints for better scheduling
 - the UI must become a modern personal dashboard rather than an unstyled technical placeholder
 
-This follow-up revision extends that design in three additional ways:
+This follow-up revision extends that design in four additional ways:
 
 - capacity planning must be driven by arbitrary date input rather than a fixed current-week-only surface
 - the system must expose planning-health warnings when capacity entries are missing within the next 7 days
 - the Today view must behave as a true daily execution surface rather than a generic schedule dump
+- the Web UI must be rebuilt on a modern component and styling foundation rather than incremental inline-style patching
 
 ## Goals
 
@@ -297,7 +298,17 @@ The purpose is to let both the human and the agent notice that planning confiden
 
 ## Web UI
 
-The UI direction is a modern personal dashboard, not a dense enterprise CRUD screen and not a calendar-only surface.
+The UI direction is a modern personal planning console built for dense daily use, not a dense enterprise CRUD screen and not a calendar-only surface.
+
+### UI Foundation
+
+The redesign should standardize the frontend on:
+
+- Tailwind CSS for layout, spacing, color, and responsive composition
+- shadcn/ui for reusable primitives and consistent interaction surfaces
+- project-local wrapper components for recurring product patterns such as metric cards, warning alerts, and status badges
+
+Inline style objects should be treated as legacy implementation and replaced as part of the redesign.
 
 ### Design Direction
 
@@ -306,6 +317,32 @@ The UI direction is a modern personal dashboard, not a dense enterprise CRUD scr
 - mobile-first one-column layouts should still work well on desktop
 - planning views should feel structured and calm rather than visually noisy
 - the interface should be intentionally styled, not raw HTML defaults
+- overall information density should be moderately high rather than sparse
+- the visual style should read as a practical planning console, not a marketing page
+- color should stay in a neutral `slate / zinc / white` range with restrained `amber`, `emerald`, and `rose` accents for state
+- warnings and risk should be highly visible without overwhelming the main execution flow
+
+### Shared Interaction Model
+
+The Web app should separate:
+
+- execution surfaces, where the user mostly reads and records work
+- planning surfaces, where the user edits capacities, reviews proposals, and inspects warnings
+
+This should be visible in the UI itself:
+
+- Today should feel lighter, faster, and more action-oriented
+- Week and Proposals should feel denser and more analytical
+- Inbox should optimize for quick capture first, lightweight editing second
+
+Shared UI primitives should include at least:
+
+- top-level app shell and navigation
+- metric card
+- warning alert
+- status badge
+- dense table/list containers
+- form row patterns for compact editing
 
 ### Today
 
@@ -318,10 +355,19 @@ Must support:
 
 - viewing only slices scheduled for the current date
 - seeing the active proposal/source plan
+- seeing a compact day summary before the task list
 - entering `spentMinutes`
 - entering `remainingMinutesAfter`
 - optional work-log note
 - seeing a lightweight planning-health warning when near-term capacities are missing
+- being usable as the main page the user opens every day
+
+Preferred structure:
+
+- top summary strip
+- current warnings / confidence state
+- dense list of today's slices
+- quick logging controls attached directly to each slice
 
 ### Inbox
 
@@ -335,6 +381,13 @@ Must support:
 - create task with `title`, `remainingMinutes`, `dueDate`, `urgency`, `taskType`, `energy`, `notes`
 - edit existing task properties
 - distinguish inbox vs active/done state
+- keep capture fast even when richer metadata is available
+
+Preferred structure:
+
+- compact capture form at the top
+- editable task list below
+- visible badges for urgency, type, energy, and status
 
 ### Week
 
@@ -354,6 +407,15 @@ Must support:
 - seeing metrics and pressure signals
 - seeing warning banners for missing capacity dates within the next 7 days
 
+Preferred structure:
+
+- compact navigation and date-jump controls at the top
+- a dense planning summary row
+- a table-like or grid-like 7-day capacity editor
+- visible warning state before the editable rows
+
+The Week surface should feel closer to a planning console than to a stack of large disconnected cards.
+
 ### Proposals
 
 Purpose:
@@ -368,6 +430,12 @@ Must support:
 - inspect `unscheduledTaskIds`
 - inspect `capacityPressureByDate`
 - approve or reject
+
+Preferred structure:
+
+- a compact review list
+- dense detail sections for risk and capacity pressure
+- approval actions that remain visible without excessive scrolling
 
 ## MCP Surface
 
@@ -423,6 +491,7 @@ In other words:
 
 - Web UI must be sufficient for normal operation
 - MCP must be helpful, not mandatory
+- the user should be able to live primarily in the Web UI and only occasionally care that an agent is participating
 
 ## Migration / Cleanup Requirement
 
@@ -443,5 +512,7 @@ The design is considered satisfied when:
 - MCP tools support the same enhanced model
 - metrics remain accessible for agents and UI
 - planning-health warnings are accessible from both Web UI and MCP
-- the UI is intentionally styled for day-to-day human use
+- the UI is intentionally styled for day-to-day human use on top of Tailwind CSS and shadcn/ui primitives
+- the Week view is driven by arbitrary dates rather than a fixed current week
+- the information density is high enough that repeated daily use does not feel wasteful
 - documentation no longer contains leaked local absolute paths
