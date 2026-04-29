@@ -74,7 +74,7 @@ describe("Web UI", () => {
 
   it("renders the daily execution heading", async () => {
     render(await HomePage());
-    expect(screen.getByRole("heading", { name: "今日の実行面" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "今日" })).toBeInTheDocument();
   });
 
   it("renders the app shell marker for the redesigned UI foundation", () => {
@@ -92,7 +92,7 @@ describe("Web UI", () => {
 
     expect(screen.getByText("Write notes")).toBeInTheDocument();
     expect(screen.getAllByText("60 分").length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "実績を記録する" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "記録" })).toHaveLength(1);
     expect(screen.queryByText("2026-04-30")).not.toBeInTheDocument();
   });
 

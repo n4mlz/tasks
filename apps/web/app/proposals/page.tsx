@@ -1,6 +1,5 @@
 import React from "react";
-import { CheckCircle2, GitCompareArrows, ShieldAlert, XCircle } from "lucide-react";
-import { SectionHeader } from "../../components/section-header";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { StatusBadge } from "../../components/status-badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -28,41 +27,19 @@ export default async function ProposalsPage() {
   }>;
 
   return (
-    <section className="grid gap-6">
-      <Card className="border-white/70 bg-white/92 shadow-[0_20px_70px_rgba(15,23,42,0.08)]">
-        <CardContent className="grid gap-5 p-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <SectionHeader
-            eyebrow="提案"
-            title="再配分の提案を確認する"
-            description="task・実績・余力時間の変更によって作られた保留中の提案をここで承認します。agent は作成できても、確定は人間が行います。"
-          />
-          <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4">
-            <div className="flex items-center gap-2 text-slate-900">
-              <GitCompareArrows className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold">見るべき観点</span>
-            </div>
-            <p className="text-sm leading-6 text-slate-600">
-              締切リスク、未配分 task、容量が苦しい日付だけ見れば十分です。細かい順序の最適化は後からでもできます。
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+    <section className="grid gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">提案</h1>
+        <StatusBadge tone="secondary">{`${proposals.length} 件`}</StatusBadge>
+      </div>
 
-      <div className="grid gap-4">
-        <SectionHeader
-          compact
-          title="承認待ちの提案"
-          description="各 proposal の理由と危険信号を密度高く確認できる review 面です。"
-        />
-
-        {proposals.length === 0 ? (
-          <Card className="border-dashed border-slate-300/90 bg-white/90">
-            <CardContent className="p-6 text-sm leading-6 text-slate-600">
-              現在 pending の proposal はありません。task や余力時間が変わると、新しい proposal がここに並びます。
-            </CardContent>
-          </Card>
-        ) : (
-          proposals.map((proposal) => {
+      {proposals.length === 0 ? (
+        <Card className="border-dashed border-slate-300/90 bg-white/90">
+          <CardContent className="p-5 text-sm text-slate-600">承認待ちの提案はありません。</CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3">
+          {proposals.map((proposal) => {
             const riskFlags = proposal.summary?.riskFlags ?? [];
             const unscheduledTaskIds = proposal.summary?.unscheduledTaskIds ?? [];
             const capacityPressureEntries = Object.entries(
@@ -70,22 +47,19 @@ export default async function ProposalsPage() {
             );
 
             return (
-              <Card
-                key={proposal.id}
-                className="border-white/80 bg-white/94 shadow-[0_14px_44px_rgba(15,23,42,0.07)]"
-              >
+              <Card key={proposal.id} className="border-white/80 bg-white/94">
                 <CardHeader className="gap-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <CardTitle className="text-lg tracking-[-0.03em]">{proposal.id}</CardTitle>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge tone="secondary">{proposal.reason}</StatusBadge>
-                        <StatusBadge tone={riskFlags.length > 0 ? "warning" : "success"}>
-                          {riskFlags.length > 0 ? `${riskFlags.length} 件の注意` : "大きな警告なし"}
-                        </StatusBadge>
-                        <StatusBadge tone={unscheduledTaskIds.length > 0 ? "danger" : "outline"}>
-                          未配分 {unscheduledTaskIds.length}
-                        </StatusBadge>
+                        {riskFlags.length > 0 ? (
+                          <StatusBadge tone="warning">{`${riskFlags.length} 件の注意`}</StatusBadge>
+                        ) : null}
+                        {unscheduledTaskIds.length > 0 ? (
+                          <StatusBadge tone="danger">{`未配分 ${unscheduledTaskIds.length}`}</StatusBadge>
+                        ) : null}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -104,77 +78,56 @@ export default async function ProposalsPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="grid gap-5">
-                  <div className="grid gap-4 xl:grid-cols-[1fr_1fr_1.2fr]">
-                    <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-slate-900">
-                        <ShieldAlert className="h-4 w-4 text-amber-600" />
-                        <span className="text-sm font-semibold">リスク</span>
-                      </div>
-                      {riskFlags.length === 0 ? (
-                        <p className="text-sm leading-6 text-slate-600">リスクは検出されていません。</p>
-                      ) : (
-                        <ul className="grid gap-2 text-sm leading-6 text-slate-600">
-                          {riskFlags.map((flag) => (
-                            <li key={flag}>{flag}</li>
-                          ))}
-                        </ul>
-                      )}
+                <CardContent className="grid gap-4 text-sm text-slate-600">
+                  {riskFlags.length > 0 ? (
+                    <div className="grid gap-1">
+                      <span className="font-medium text-slate-900">リスク</span>
+                      <ul className="grid gap-1">
+                        {riskFlags.map((flag) => (
+                          <li key={flag}>{flag}</li>
+                        ))}
+                      </ul>
                     </div>
-
-                    <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-slate-900">
-                        <ShieldAlert className="h-4 w-4 text-rose-500" />
-                        <span className="text-sm font-semibold">未配分 task</span>
+                  ) : null}
+                  {unscheduledTaskIds.length > 0 ? (
+                    <div className="grid gap-1">
+                      <span className="font-medium text-slate-900">未配分 task</span>
+                      <div className="flex flex-wrap gap-2">
+                        {unscheduledTaskIds.map((taskId) => (
+                          <StatusBadge key={taskId} tone="danger">
+                            {taskId}
+                          </StatusBadge>
+                        ))}
                       </div>
-                      <h3 className="sr-only">未配分 task</h3>
-                      {unscheduledTaskIds.length === 0 ? (
-                        <p className="text-sm leading-6 text-slate-600">すべての task が配分済みです。</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {unscheduledTaskIds.map((taskId) => (
-                            <StatusBadge key={taskId} tone="danger">
-                              {taskId}
-                            </StatusBadge>
-                          ))}
-                        </div>
-                      )}
                     </div>
-
-                    <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4">
-                      <div className="mb-3 flex items-center gap-2 text-slate-900">
-                        <GitCompareArrows className="h-4 w-4 text-slate-500" />
-                        <span className="text-sm font-semibold">容量圧迫</span>
-                      </div>
-                      <h3 className="sr-only">容量圧迫</h3>
-                      {capacityPressureEntries.length === 0 ? (
-                        <p className="text-sm leading-6 text-slate-600">圧迫した日付はありません。</p>
-                      ) : (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>日付</TableHead>
-                              <TableHead>圧迫率</TableHead>
+                  ) : null}
+                  {capacityPressureEntries.length > 0 ? (
+                    <div className="grid gap-1">
+                      <span className="font-medium text-slate-900">容量圧迫</span>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>日付</TableHead>
+                            <TableHead>圧迫率</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {capacityPressureEntries.map(([date, pressure]) => (
+                            <TableRow key={date}>
+                              <TableCell>{date}</TableCell>
+                              <TableCell>{pressure}</TableCell>
                             </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {capacityPressureEntries.map(([date, pressure]) => (
-                              <TableRow key={date}>
-                                <TableCell>{date}</TableCell>
-                                <TableCell>{pressure}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      )}
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
+                  ) : null}
                 </CardContent>
               </Card>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -1,6 +1,5 @@
 import React from "react";
-import { Inbox, PencilLine, Sparkles } from "lucide-react";
-import { SectionHeader } from "../../components/section-header";
+import { PencilLine } from "lucide-react";
 import { StatusBadge } from "../../components/status-badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -37,34 +36,16 @@ export default async function InboxPage() {
   }>;
 
   return (
-    <section className="grid gap-6">
-      <Card className="border-white/70 bg-white/92 shadow-[0_20px_70px_rgba(15,23,42,0.08)]">
-        <CardContent className="grid gap-6 p-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <SectionHeader
-            eyebrow="受信箱"
-            title="思いついた task をここに集める"
-            description="最小限の入力で task を投げ込み、必要なら属性を補います。締切と残り時間があるだけでも、提案層がかなり働けます。"
-          />
-          <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4">
-            <div className="flex items-center gap-2 text-slate-900">
-              <Sparkles className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-semibold">理想運用</span>
-            </div>
-            <p className="text-sm leading-6 text-slate-600">
-              まずはタイトルと残り時間、必要なら期限だけ入れて受け止めます。後から Hermes などの agent が task
-              type や energy を補っても構いません。
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+    <section className="grid gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">受信箱</h1>
+        <StatusBadge tone="secondary">{`${tasks.length} 件`}</StatusBadge>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="border-white/80 bg-white/94 shadow-[0_16px_52px_rgba(15,23,42,0.06)]">
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="border-white/80 bg-white/94">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl tracking-[-0.03em]">
-              <Inbox className="h-5 w-5 text-amber-600" />
-              新しい task を追加
-            </CardTitle>
+            <CardTitle className="text-lg tracking-[-0.03em]">追加</CardTitle>
           </CardHeader>
           <CardContent>
             <form action="/api/tasks" className="grid gap-4" method="post">
@@ -119,31 +100,20 @@ export default async function InboxPage() {
                 <Textarea name="notes" rows={4} />
               </label>
               <Button className="justify-self-start" type="submit">
-                task を追加する
+                追加
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4">
-          <SectionHeader
-            compact
-            title="既存 task の軽編集"
-            description="inbox のままでも active に移した後でも、期限・残り時間・属性をここで手早く更新できます。"
-          />
-
+        <div className="grid gap-3">
           {tasks.length === 0 ? (
             <Card className="border-dashed border-slate-300/90 bg-white/90">
-              <CardContent className="p-6 text-sm leading-6 text-slate-600">
-                task はまだありません。上のフォームから追加すると、ここに編集カードが並びます。
-              </CardContent>
+              <CardContent className="p-5 text-sm text-slate-600">task はありません。</CardContent>
             </Card>
           ) : (
             tasks.map((task) => (
-              <Card
-                key={task.id}
-                className="border-white/80 bg-white/94 shadow-[0_12px_40px_rgba(15,23,42,0.06)]"
-              >
+              <Card key={task.id} className="border-white/80 bg-white/94">
                 <CardHeader className="gap-3 pb-0">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
@@ -232,7 +202,7 @@ export default async function InboxPage() {
                       </label>
                     </div>
                     <Button className="justify-self-start" type="submit" variant="secondary">
-                      task を更新する
+                      更新
                     </Button>
                   </form>
                 </CardContent>

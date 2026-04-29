@@ -63,6 +63,6 @@ describe("Inbox flow", () => {
     render(await WeekPageWithProps({ searchParams: Promise.resolve({ referenceDate: "2026-05-02" }) }));
 
     expect(screen.getAllByRole("button", { name: "保存" }).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "この日付へ移動" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "移動" })).toBeInTheDocument();
   });
 });
