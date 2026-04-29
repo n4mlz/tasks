@@ -850,6 +850,289 @@ git add apps/mcp/src/server.ts apps/mcp/tests/server.test.ts apps/web/app/api/sc
 git commit -m "feat: expose planning health to agents"
 ```
 
+## Task 10: Install Tailwind CSS And shadcn/ui As The Web Foundation
+
+**Files:**
+- Modify: `package.json`
+- Modify: `apps/web/package.json`
+- Modify: `apps/web/tsconfig.json`
+- Modify: `apps/web/app/layout.tsx`
+- Modify: `apps/web/next-env.d.ts`
+- Create: `apps/web/app/globals.css`
+- Create: `apps/web/components.json`
+- Create: `apps/web/lib/utils.ts`
+- Create: `apps/web/components/ui/button.tsx`
+- Create: `apps/web/components/ui/card.tsx`
+- Create: `apps/web/components/ui/input.tsx`
+- Create: `apps/web/components/ui/textarea.tsx`
+- Create: `apps/web/components/ui/select.tsx`
+- Create: `apps/web/components/ui/badge.tsx`
+- Create: `apps/web/components/ui/alert.tsx`
+- Create: `apps/web/components/ui/table.tsx`
+- Create: `apps/web/components/ui/separator.tsx`
+
+- [ ] **Step 1: Write failing UI smoke expectations for class-based shell rendering**
+
+Extend `apps/web/tests/ui.test.tsx` with at least one assertion that checks for Tailwind/className-driven shell markup rather than inline-style-only rendering, for example:
+
+```ts
+expect(document.querySelector("[data-app-shell='task-platform']")).not.toBeNull();
+```
+
+- [ ] **Step 2: Run the Web tests and verify they fail**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx`
+
+Expected: FAIL because the current layout does not expose the new shell contract and does not use the new component foundation.
+
+- [ ] **Step 3: Install Tailwind and shadcn dependencies**
+
+Add the minimal packages needed for a modern Next.js + shadcn stack, including:
+
+- `tailwindcss`
+- `@tailwindcss/postcss` or the version-appropriate Tailwind integration
+- `class-variance-authority`
+- `clsx`
+- `tailwind-merge`
+- `lucide-react`
+
+Keep the dependency set minimal. Do not add animation libraries unless the redesign truly needs them.
+
+- [ ] **Step 4: Add the global styling foundation**
+
+Create `apps/web/app/globals.css` with:
+
+- Tailwind imports
+- CSS variables for background, foreground, border, muted, card, warning, success, danger
+- a dense, neutral design token palette using `slate / zinc / amber / emerald / rose`
+- base typography and body styling
+
+Update `apps/web/app/layout.tsx` to import the stylesheet.
+
+- [ ] **Step 5: Add shadcn configuration and utilities**
+
+Create:
+
+- `apps/web/components.json`
+- `apps/web/lib/utils.ts`
+
+Use the standard `cn()` helper pattern so app-level components can compose Tailwind classes cleanly.
+
+- [ ] **Step 6: Create the core shadcn-style UI primitives**
+
+Add lightweight local copies of the primitives used by the redesign:
+
+- `button`
+- `card`
+- `input`
+- `textarea`
+- `select`
+- `badge`
+- `alert`
+- `table`
+- `separator`
+
+Only add the components the redesign will actually use.
+
+- [ ] **Step 7: Re-run the focused Web test and verify it passes**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx`
+
+Expected: PASS
+
+- [ ] **Step 8: Commit the UI foundation**
+
+```bash
+git add package.json apps/web/package.json apps/web/tsconfig.json apps/web/app/layout.tsx apps/web/next-env.d.ts apps/web/app/globals.css apps/web/components.json apps/web/lib/utils.ts apps/web/components/ui
+git commit -m "feat: add shadcn web foundation"
+```
+
+## Task 11: Rebuild The Shared App Shell And Dense Planning Primitives
+
+**Files:**
+- Modify: `apps/web/app/layout.tsx`
+- Create: `apps/web/components/app-shell.tsx`
+- Create: `apps/web/components/metric-card.tsx`
+- Create: `apps/web/components/status-badge.tsx`
+- Create: `apps/web/components/planning-alert.tsx`
+- Create: `apps/web/components/section-header.tsx`
+- Modify: `apps/web/tests/ui.test.tsx`
+
+- [ ] **Step 1: Write failing tests for the new shell and shared components**
+
+Add assertions for:
+
+- a stable app shell marker such as `data-app-shell="task-platform"`
+- dense top navigation links for `Today`, `Inbox`, `Week`, `Proposals`
+- a warning alert component that is reusable across pages
+
+- [ ] **Step 2: Run the shell-focused UI tests and verify they fail**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx`
+
+Expected: FAIL because the new componentized shell does not exist yet.
+
+- [ ] **Step 3: Build the shared app shell**
+
+Create `apps/web/components/app-shell.tsx` and move the top-level layout structure into it. It should provide:
+
+- sticky dense navigation
+- compact title area
+- room for a page-level subtitle
+- a className-based responsive container
+
+- [ ] **Step 4: Build the recurring planning primitives**
+
+Create:
+
+- `metric-card.tsx`
+- `status-badge.tsx`
+- `planning-alert.tsx`
+- `section-header.tsx`
+
+These should wrap the low-level shadcn primitives and encode product-specific density and visual hierarchy.
+
+- [ ] **Step 5: Re-run the shell-focused tests and verify they pass**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx`
+
+Expected: PASS
+
+- [ ] **Step 6: Commit the shared shell layer**
+
+```bash
+git add apps/web/app/layout.tsx apps/web/components/app-shell.tsx apps/web/components/metric-card.tsx apps/web/components/status-badge.tsx apps/web/components/planning-alert.tsx apps/web/components/section-header.tsx apps/web/tests/ui.test.tsx
+git commit -m "feat: add dense planning shell"
+```
+
+## Task 12: Redesign Today And Week As The Primary Daily-Use Surfaces
+
+**Files:**
+- Modify: `apps/web/app/page.tsx`
+- Modify: `apps/web/app/week/page.tsx`
+- Modify: `apps/web/lib/task-platform.ts`
+- Modify: `apps/web/tests/ui.test.tsx`
+- Modify: `apps/web/tests/flows.test.tsx`
+
+- [ ] **Step 1: Write failing tests for the redesigned Today and Week layouts**
+
+Add or update tests so they assert:
+
+- Today shows a dense summary row before slice cards
+- Today still filters to current-day slices only
+- Today exposes planning-health warnings in a reusable alert, not ad-hoc markup
+- Week shows compact navigation controls and an arbitrary-date jump row
+- Week renders a denser planning editor structure than a stack of oversized cards
+
+- [ ] **Step 2: Run the focused Web tests and verify they fail**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: FAIL because the current implementation still uses transitional page markup.
+
+- [ ] **Step 3: Rebuild Today as a dense execution dashboard**
+
+Update `apps/web/app/page.tsx` to use the shared primitives and shadcn components so it includes:
+
+- a compact summary strip
+- a planning-health alert
+- a dense list of today's slices with direct log-work controls
+- minimal scrolling before the user reaches today's actionable tasks
+
+- [ ] **Step 4: Rebuild Week as a planning console**
+
+Update `apps/web/app/week/page.tsx` so it uses:
+
+- compact top controls
+- summary cards
+- a dense table-like capacity editor
+- visible warning state above the editable rows
+
+Preserve:
+
+- `referenceDate`
+- previous/today/next movement
+- arbitrary-date jump
+- editable capacity forms
+
+- [ ] **Step 5: Re-run the focused tests and verify they pass**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: PASS
+
+- [ ] **Step 6: Run a production build and verify it passes**
+
+Run: `timeout 60s pnpm --filter web build`
+
+Expected: PASS
+
+- [ ] **Step 7: Commit the Today/Week redesign**
+
+```bash
+git add apps/web/app/page.tsx apps/web/app/week/page.tsx apps/web/lib/task-platform.ts apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx
+git commit -m "feat: redesign daily planning surfaces"
+```
+
+## Task 13: Redesign Inbox And Proposals For Dense Review And Editing
+
+**Files:**
+- Modify: `apps/web/app/inbox/page.tsx`
+- Modify: `apps/web/app/proposals/page.tsx`
+- Modify: `apps/web/tests/ui.test.tsx`
+- Modify: `apps/web/tests/flows.test.tsx`
+
+- [ ] **Step 1: Write failing tests for the redesigned Inbox and Proposals pages**
+
+Add assertions for:
+
+- Inbox uses a compact capture block plus a denser editable task list
+- Inbox surfaces task status/type/energy/urgency through visible badges or compact metadata
+- Proposals renders a dense review layout for risk, unscheduled work, and capacity pressure
+- approval actions remain visible without excessive vertical spacing
+
+- [ ] **Step 2: Run the focused Web tests and verify they fail**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: FAIL because the current pages still use the transitional card-only layout.
+
+- [ ] **Step 3: Rebuild Inbox around fast capture and compact editing**
+
+Update `apps/web/app/inbox/page.tsx` to use the new primitives so it has:
+
+- a compact create form at the top
+- a dense editable list below
+- visible status/type/energy/urgency badges
+- compact editing controls that preserve all current functionality
+
+- [ ] **Step 4: Rebuild Proposals as a dense review console**
+
+Update `apps/web/app/proposals/page.tsx` to use:
+
+- compact list rows or cards
+- dense detail sections for `riskFlags`, `unscheduledTaskIds`, `capacityPressureByDate`
+- visible approval/rejection controls
+
+- [ ] **Step 5: Re-run the focused tests and verify they pass**
+
+Run: `pnpm test -- apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx`
+
+Expected: PASS
+
+- [ ] **Step 6: Run a final Web build and verify it passes**
+
+Run: `timeout 60s pnpm --filter web build`
+
+Expected: PASS
+
+- [ ] **Step 7: Commit the Inbox/Proposals redesign**
+
+```bash
+git add apps/web/app/inbox/page.tsx apps/web/app/proposals/page.tsx apps/web/tests/ui.test.tsx apps/web/tests/flows.test.tsx
+git commit -m "feat: redesign planning review views"
+```
+
 ## Self-Review
 
 Spec coverage check:
@@ -862,6 +1145,10 @@ Spec coverage check:
 - planning-health warnings in Web and MCP: covered by Task 7, Task 8, and Task 9
 - arbitrary-date capacity planning UX: covered by Task 8
 - Today-only daily execution surface: covered by Task 8
+- Tailwind and shadcn foundation: covered by Task 10
+- shared dense planning shell: covered by Task 11
+- Today and Week redesign for repeated daily use: covered by Task 12
+- Inbox and Proposals redesign for dense review: covered by Task 13
 - public-doc and history cleanup: covered by Task 5
 - final verification: covered by Task 6
 
