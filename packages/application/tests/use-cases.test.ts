@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   approveProposalUseCase,
   createTaskUseCase,
+  deleteTaskUseCase,
   generateScheduleProposalUseCase,
   getPlanningHealthUseCase,
   getMetricsUseCase,
@@ -102,6 +103,7 @@ describe("logWorkUseCase", () => {
 
     const workLogRepository = {
       append: vi.fn().mockResolvedValue(undefined),
+      listByTaskIds: vi.fn().mockResolvedValue([]),
     };
 
     const capacityRepository = {
@@ -144,6 +146,114 @@ describe("logWorkUseCase", () => {
         }),
       }),
     );
+    expect(taskRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remainingMinutes: 60,
+      }),
+    );
+  });
+
+  it("marks a task done when remaining work reaches zero", async () => {
+    const existingTask = {
+      id: "task_done",
+      title: "Submit form",
+      notes: "",
+      status: "active" as const,
+      remainingMinutes: 30,
+      dueDate: null,
+      urgency: "normal" as const,
+      taskType: "admin" as const,
+      energy: "low" as const,
+      createdAt: "2026-04-27T00:00:00.000Z",
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    };
+
+    const taskRepository = {
+      findById: vi.fn().mockResolvedValue(existingTask),
+      save: vi.fn().mockResolvedValue(undefined),
+      listSchedulable: vi.fn().mockResolvedValue([]),
+    };
+
+    await logWorkUseCase(
+      {
+        taskRepository,
+        workLogRepository: {
+          append: vi.fn().mockResolvedValue(undefined),
+          listByTaskIds: vi.fn().mockResolvedValue([]),
+        },
+        capacityRepository: {
+          listBetween: vi.fn().mockResolvedValue([]),
+        },
+        scheduleRepository: {
+          savePendingProposal: vi.fn().mockResolvedValue(undefined),
+        },
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+      {
+        taskId: "task_done",
+        date: "2026-04-27",
+        spentMinutes: 30,
+        remainingMinutesAfter: 0,
+      },
+    );
+
+    expect(taskRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        remainingMinutes: 0,
+        status: "done",
+      }),
+    );
+  });
+});
+
+describe("deleteTaskUseCase", () => {
+  it("deletes a task and regenerates a pending proposal", async () => {
+    const existingTask = {
+      id: "task_delete",
+      title: "Old task",
+      notes: "",
+      status: "active" as const,
+      remainingMinutes: 60,
+      dueDate: null,
+      urgency: "normal" as const,
+      taskType: "unknown" as const,
+      energy: "unknown" as const,
+      createdAt: "2026-04-27T00:00:00.000Z",
+      updatedAt: "2026-04-27T00:00:00.000Z",
+    };
+
+    const taskRepository = {
+      findById: vi.fn().mockResolvedValue(existingTask),
+      delete: vi.fn().mockResolvedValue(undefined),
+      listSchedulable: vi.fn().mockResolvedValue([]),
+    };
+    const capacityRepository = {
+      listBetween: vi.fn().mockResolvedValue([]),
+    };
+    const scheduleRepository = {
+      savePendingProposal: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await deleteTaskUseCase(
+      {
+        taskRepository,
+        capacityRepository,
+        scheduleRepository,
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+      { taskId: "task_delete" },
+    );
+
+    expect(taskRepository.delete).toHaveBeenCalledWith("task_delete");
+    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
   });
 });
 

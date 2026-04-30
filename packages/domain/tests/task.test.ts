@@ -74,12 +74,12 @@ describe("task validation", () => {
 });
 
 describe("day capacity defaults", () => {
-  it("creates a 20 percent buffer by default", () => {
+  it("uses the entered task time as-is by default", () => {
     const capacity = createDayCapacity({
       date: "2026-04-27",
       availableMinutes: 300,
     });
 
-    expect(capacity.bufferMinutes).toBe(60);
+    expect(capacity.bufferMinutes).toBe(0);
   });
 });

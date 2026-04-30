@@ -12,6 +12,11 @@ import {
   TableRow,
 } from "../../components/ui/table";
 import { taskPlatform } from "../../lib/task-platform";
+import {
+  formatHoursFromMinutes,
+  humanizeProposalReason,
+  humanizeRiskFlag,
+} from "../../lib/presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +30,11 @@ export default async function ProposalsPage() {
       capacityPressureByDate?: Record<string, number>;
     };
   }>;
+  const tasks = (await taskPlatform.listTasks()) as Array<{
+    id: string;
+    title: string;
+  }>;
+  const taskTitleById = new Map(tasks.map((task) => [task.id, task.title]));
 
   return (
     <section className="grid gap-4">
@@ -39,7 +49,7 @@ export default async function ProposalsPage() {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {proposals.map((proposal) => {
+          {proposals.map((proposal, index) => {
             const riskFlags = proposal.summary?.riskFlags ?? [];
             const unscheduledTaskIds = proposal.summary?.unscheduledTaskIds ?? [];
             const capacityPressureEntries = Object.entries(
@@ -51,9 +61,11 @@ export default async function ProposalsPage() {
                 <CardHeader className="gap-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
-                      <CardTitle className="text-lg tracking-[-0.03em]">{proposal.id}</CardTitle>
+                      <CardTitle className="text-lg tracking-[-0.03em]">{`提案 ${index + 1}`}</CardTitle>
                       <div className="flex flex-wrap gap-2">
-                        <StatusBadge tone="secondary">{proposal.reason}</StatusBadge>
+                        <StatusBadge tone="secondary">
+                          {humanizeProposalReason(proposal.reason)}
+                        </StatusBadge>
                         {riskFlags.length > 0 ? (
                           <StatusBadge tone="warning">{`${riskFlags.length} 件の注意`}</StatusBadge>
                         ) : null}
@@ -84,18 +96,18 @@ export default async function ProposalsPage() {
                       <span className="font-medium text-slate-900">リスク</span>
                       <ul className="grid gap-1">
                         {riskFlags.map((flag) => (
-                          <li key={flag}>{flag}</li>
+                          <li key={flag}>{humanizeRiskFlag(flag, taskTitleById)}</li>
                         ))}
                       </ul>
                     </div>
                   ) : null}
                   {unscheduledTaskIds.length > 0 ? (
                     <div className="grid gap-1">
-                      <span className="font-medium text-slate-900">未配分 task</span>
+                      <span className="font-medium text-slate-900">未配分の task</span>
                       <div className="flex flex-wrap gap-2">
                         {unscheduledTaskIds.map((taskId) => (
                           <StatusBadge key={taskId} tone="danger">
-                            {taskId}
+                            {taskTitleById.get(taskId) ?? taskId}
                           </StatusBadge>
                         ))}
                       </div>
@@ -103,19 +115,19 @@ export default async function ProposalsPage() {
                   ) : null}
                   {capacityPressureEntries.length > 0 ? (
                     <div className="grid gap-1">
-                      <span className="font-medium text-slate-900">容量圧迫</span>
+                      <span className="font-medium text-slate-900">日ごとの配分</span>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead>日付</TableHead>
-                            <TableHead>圧迫率</TableHead>
+                            <TableHead>配分時間</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {capacityPressureEntries.map(([date, pressure]) => (
                             <TableRow key={date}>
                               <TableCell>{date}</TableCell>
-                              <TableCell>{pressure}</TableCell>
+                              <TableCell>{formatHoursFromMinutes(pressure)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

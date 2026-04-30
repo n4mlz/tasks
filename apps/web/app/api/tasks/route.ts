@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
+import { hoursToMinutes } from "../../../lib/presentation";
 
 async function readTaskPayload(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
   const json = await readTaskPayload(request);
   const parsed = {
     title: String(json.title ?? ""),
-    remainingMinutes: Number(json.remainingMinutes),
+    remainingMinutes: hoursToMinutes(Number(json.remainingMinutes)),
     dueDate: typeof json.dueDate === "string" && json.dueDate ? json.dueDate : undefined,
     urgency: json.urgency,
     taskType: json.taskType,

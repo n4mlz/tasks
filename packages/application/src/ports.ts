@@ -9,6 +9,7 @@ export interface TaskRepository {
   findById(taskId: string): Promise<Task | null>;
   listSchedulable(): Promise<Task[]>;
   listAll(): Promise<Task[]>;
+  delete(taskId: string): Promise<void>;
 }
 
 export interface CapacityRepository {
@@ -38,6 +39,16 @@ export interface WorkLogRepository {
     remainingMinutesAfter: number;
     note: string;
   }): Promise<void>;
+  listByTaskIds(taskIds: string[]): Promise<
+    Array<{
+      id: string;
+      taskId: string;
+      date: string;
+      spentMinutes: number;
+      remainingMinutesAfter: number;
+      note: string;
+    }>
+  >;
 }
 
 export interface IdGenerator {

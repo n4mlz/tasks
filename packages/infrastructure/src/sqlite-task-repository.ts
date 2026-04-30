@@ -98,4 +98,8 @@ export class SqliteTaskRepository {
       updatedAt: String(row.updated_at),
     }));
   }
+
+  async delete(taskId: string): Promise<void> {
+    this.db.prepare(`DELETE FROM tasks WHERE id = ?`).run(taskId);
+  }
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { PencilLine } from "lucide-react";
+import { DeleteTaskDialog } from "../../components/delete-task-dialog";
 import { StatusBadge } from "../../components/status-badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
@@ -9,17 +10,13 @@ import { Textarea } from "../../components/ui/textarea";
 import { taskPlatform } from "../../lib/task-platform";
 import {
   energyLabels,
-  formatMinutes,
+  formatHoursFromMinutes,
   statusLabels,
   taskTypeLabels,
-  urgencyLabels,
 } from "../../lib/presentation";
 
 export const dynamic = "force-dynamic";
 
-const urgencyOptions = ["today", "soon", "normal"] as const;
-const taskTypeOptions = ["unknown", "deep", "shallow", "admin", "research", "writing", "implementation"] as const;
-const energyOptions = ["unknown", "low", "medium", "high"] as const;
 const statusOptions = ["inbox", "active", "done", "archived"] as const;
 
 export default async function InboxPage() {
@@ -29,7 +26,6 @@ export default async function InboxPage() {
     remainingMinutes: number;
     status: string;
     dueDate: string | null;
-    urgency?: string;
     taskType?: string;
     energy?: string;
     notes?: string;
@@ -38,7 +34,7 @@ export default async function InboxPage() {
   return (
     <section className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">受信箱</h1>
+        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Inbox</h1>
         <StatusBadge tone="secondary">{`${tasks.length} 件`}</StatusBadge>
       </div>
 
@@ -55,44 +51,12 @@ export default async function InboxPage() {
               </label>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  残り時間
-                  <Input min="1" name="remainingMinutes" type="number" />
+                  必要な時間 (時間)
+                  <Input min="0.25" name="remainingMinutes" step="0.25" type="number" />
                 </label>
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   期限
                   <Input name="dueDate" type="date" />
-                </label>
-              </div>
-              <div className="grid gap-4 md:grid-cols-3">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  緊急度
-                  <Select defaultValue="normal" name="urgency">
-                    {urgencyOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {urgencyLabels[option]}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  task 種別
-                  <Select defaultValue="unknown" name="taskType">
-                    {taskTypeOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {taskTypeLabels[option]}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  energy
-                  <Select defaultValue="unknown" name="energy">
-                    {energyOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {energyLabels[option]}
-                      </option>
-                    ))}
-                  </Select>
                 </label>
               </div>
               <label className="grid gap-2 text-sm font-medium text-slate-700">
@@ -119,17 +83,23 @@ export default async function InboxPage() {
                     <div className="space-y-2">
                       <CardTitle className="text-lg tracking-[-0.03em]">{task.title}</CardTitle>
                       <div className="flex flex-wrap gap-2">
-                        <StatusBadge>{formatMinutes(task.remainingMinutes)}</StatusBadge>
+                        <StatusBadge>{formatHoursFromMinutes(task.remainingMinutes)}</StatusBadge>
                         <StatusBadge tone="secondary">{statusLabels[task.status] ?? task.status}</StatusBadge>
                         <StatusBadge tone="outline">
                           {task.dueDate ? `期限 ${task.dueDate}` : "期限なし"}
                         </StatusBadge>
-                        <StatusBadge tone="outline">
-                          {urgencyLabels[task.urgency ?? "normal"] ?? "通常"}
-                        </StatusBadge>
+                        {task.taskType && task.taskType !== "unknown" ? (
+                          <StatusBadge tone="outline">{taskTypeLabels[task.taskType] ?? task.taskType}</StatusBadge>
+                        ) : null}
+                        {task.energy && task.energy !== "unknown" ? (
+                          <StatusBadge tone="outline">{energyLabels[task.energy] ?? task.energy}</StatusBadge>
+                        ) : null}
                       </div>
                     </div>
-                    <PencilLine className="h-5 w-5 text-slate-400" />
+                    <div className="flex items-center gap-2">
+                      <PencilLine className="h-5 w-5 text-slate-400" />
+                      <DeleteTaskDialog taskId={task.id} title={task.title} />
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-5">
@@ -140,55 +110,20 @@ export default async function InboxPage() {
                         <Input defaultValue={task.title} name="title" />
                       </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        残り時間
+                        残り時間 (時間)
                         <Input
-                          defaultValue={task.remainingMinutes}
+                          defaultValue={task.remainingMinutes === 0 ? "0" : String(task.remainingMinutes / 60)}
                           min="0"
                           name="remainingMinutes"
+                          step="0.25"
                           type="number"
                         />
                       </label>
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2 text-sm font-medium text-slate-700">
                         期限
                         <Input defaultValue={task.dueDate ?? ""} name="dueDate" type="date" />
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        緊急度
-                        <Select defaultValue={task.urgency ?? "normal"} name="urgency">
-                          {urgencyOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {urgencyLabels[option]}
-                            </option>
-                          ))}
-                        </Select>
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        task 種別
-                        <Select defaultValue={task.taskType ?? "unknown"} name="taskType">
-                          {taskTypeOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {taskTypeLabels[option]}
-                            </option>
-                          ))}
-                        </Select>
-                      </label>
-                      <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        energy
-                        <Select defaultValue={task.energy ?? "unknown"} name="energy">
-                          {energyOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {energyLabels[option]}
-                            </option>
-                          ))}
-                        </Select>
-                      </label>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-[1fr_220px]">
-                      <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        メモ
-                        <Textarea defaultValue={task.notes ?? ""} name="notes" rows={3} />
                       </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-700">
                         状態
@@ -201,6 +136,10 @@ export default async function InboxPage() {
                         </Select>
                       </label>
                     </div>
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      メモ
+                      <Textarea defaultValue={task.notes ?? ""} name="notes" rows={3} />
+                    </label>
                     <Button className="justify-self-start" type="submit" variant="secondary">
                       更新
                     </Button>

@@ -1,58 +1,29 @@
-import { buildScheduleProposal, updateTaskEstimate } from "@task-platform/domain";
+import { buildScheduleProposal } from "@task-platform/domain";
 import type {
   CapacityRepository,
   Clock,
   IdGenerator,
   ScheduleRepository,
   TaskRepository,
-  WorkLogRepository,
 } from "../ports";
 import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
 
-export async function logWorkUseCase(
+export async function deleteTaskUseCase(
   deps: {
-    taskRepository: Pick<TaskRepository, "findById" | "save" | "listSchedulable">;
-    workLogRepository: WorkLogRepository;
+    taskRepository: Pick<TaskRepository, "findById" | "delete" | "listSchedulable">;
     capacityRepository: Pick<CapacityRepository, "listBetween">;
     scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
-  input: {
-    taskId: string;
-    date: string;
-    spentMinutes: number;
-    remainingMinutesAfter: number;
-    note?: string;
-  },
+  input: { taskId: string },
 ): Promise<void> {
   const task = await deps.taskRepository.findById(input.taskId);
   if (!task) {
     throw new Error(`Task not found: ${input.taskId}`);
   }
 
-  const updatedTask = updateTaskEstimate(task, {
-    remainingMinutes: input.remainingMinutesAfter,
-    updatedAt: deps.clock.now(),
-  });
-  const savedTask =
-    input.remainingMinutesAfter === 0
-      ? {
-          ...updatedTask,
-          status: "done" as const,
-        }
-      : updatedTask;
-
-  await deps.workLogRepository.append({
-    id: deps.idGenerator.next("worklog"),
-    taskId: input.taskId,
-    date: input.date,
-    spentMinutes: input.spentMinutes,
-    remainingMinutesAfter: input.remainingMinutesAfter,
-    note: input.note ?? "",
-  });
-
-  await deps.taskRepository.save(savedTask);
+  await deps.taskRepository.delete(input.taskId);
 
   const tasks = await deps.taskRepository.listSchedulable();
   const horizon = selectScheduleHorizon({
@@ -73,7 +44,7 @@ export async function logWorkUseCase(
   await deps.scheduleRepository.savePendingProposal({
     ...proposal,
     id: deps.idGenerator.next("proposal"),
-    reason: "work_logged",
+    reason: "task_updated",
     generatedAt: deps.clock.now(),
   });
 }

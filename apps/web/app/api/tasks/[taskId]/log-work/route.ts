@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../../../lib/task-platform";
+import { hoursToMinutes } from "../../../../../lib/presentation";
 
 export async function POST(
   request: Request,
@@ -10,11 +11,14 @@ export async function POST(
   const json = contentType.includes("application/json")
     ? await request.json()
     : Object.fromEntries((await request.formData()).entries());
+  const markDone = String(json.markDone ?? "") === "true";
   const parsed = {
     taskId: params.taskId,
     date: String(json.date ?? ""),
-    spentMinutes: Number(json.spentMinutes),
-    remainingMinutesAfter: Number(json.remainingMinutesAfter),
+    spentMinutes: hoursToMinutes(Number(json.spentMinutes)),
+    remainingMinutesAfter: markDone
+      ? 0
+      : hoursToMinutes(Number(json.remainingMinutesAfter)),
     note: typeof json.note === "string" ? json.note : undefined,
   };
 

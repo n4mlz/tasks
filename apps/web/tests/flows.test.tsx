@@ -12,11 +12,16 @@ const { taskPlatformMock } = vi.hoisted(() => ({
     getCapacities: vi.fn(),
     getMetrics: vi.fn(),
     listProposals: vi.fn(),
+    getWorkLogs: vi.fn(),
   },
 }));
 
 vi.mock("../lib/task-platform", () => ({
   taskPlatform: taskPlatformMock,
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/inbox",
 }));
 
 import InboxPage from "../app/inbox/page";
@@ -33,6 +38,10 @@ describe("Inbox flow", () => {
     vi.setSystemTime(new Date("2026-04-28T09:00:00.000Z"));
 
     taskPlatformMock.listTasks.mockResolvedValue([]);
+    taskPlatformMock.getCurrentSchedule.mockResolvedValue({
+      activeProposalId: "proposal_1",
+      slices: [],
+    });
     taskPlatformMock.getPlanningHealth.mockResolvedValue({
       missingCapacityDatesWithin7Days: ["2026-04-29", "2026-05-01"],
       warningCount: 2,
@@ -45,13 +54,14 @@ describe("Inbox flow", () => {
       atRiskTaskCount: 1,
       pendingProposalCount: 1,
     });
+    taskPlatformMock.getWorkLogs.mockResolvedValue([]);
   });
 
   it("renders task fields for planning inputs", async () => {
     render(await InboxPage());
 
     expect(screen.getByLabelText("タイトル")).toBeInTheDocument();
-    expect(screen.getByLabelText("残り時間")).toBeInTheDocument();
+    expect(screen.getByLabelText("必要な時間 (時間)")).toBeInTheDocument();
     expect(screen.getByLabelText("期限")).toBeInTheDocument();
   });
 
@@ -62,7 +72,7 @@ describe("Inbox flow", () => {
 
     render(await WeekPageWithProps({ searchParams: Promise.resolve({ referenceDate: "2026-05-02" }) }));
 
-    expect(screen.getAllByRole("button", { name: "保存" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /を編集/ }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "移動" })).toBeInTheDocument();
   });
 });

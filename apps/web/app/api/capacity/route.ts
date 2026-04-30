@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
+import { hoursToMinutes } from "../../../lib/presentation";
 
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -8,17 +9,13 @@ export async function POST(request: Request) {
     : Object.fromEntries((await request.formData()).entries());
   const parsed = {
     date: String(json.date ?? ""),
-    availableMinutes: Number(json.availableMinutes),
-    bufferMinutes:
-      json.bufferMinutes === undefined ? undefined : Number(json.bufferMinutes),
+    availableMinutes: hoursToMinutes(Number(json.availableMinutes)),
   };
 
   if (
     !parsed.date ||
     !Number.isInteger(parsed.availableMinutes) ||
-    parsed.availableMinutes < 0 ||
-    (parsed.bufferMinutes !== undefined &&
-      (!Number.isInteger(parsed.bufferMinutes) || parsed.bufferMinutes < 0))
+    parsed.availableMinutes < 0
   ) {
     return NextResponse.json({ error: "invalid capacity payload" }, { status: 400 });
   }

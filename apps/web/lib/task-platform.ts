@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   approveProposalUseCase,
   createTaskUseCase,
+  deleteTaskUseCase,
   generateScheduleProposalUseCase,
   getMetricsUseCase,
   getPlanningHealthUseCase,
@@ -53,6 +54,7 @@ type TaskPlatform = {
   }) => Promise<void>;
   approveProposal: (input: { proposalId: string }) => Promise<void>;
   rejectProposal: (input: { proposalId: string }) => Promise<void>;
+  deleteTask: (input: { taskId: string }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
     title?: string;
@@ -81,6 +83,7 @@ type TaskPlatform = {
   getCurrentSchedule: () => Promise<unknown>;
   getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
+  getWorkLogs: (taskIds: string[]) => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
@@ -166,6 +169,18 @@ function getTaskPlatform(): TaskPlatform {
         input,
       );
     },
+    async deleteTask(input) {
+      return deleteTaskUseCase(
+        {
+          taskRepository,
+          capacityRepository,
+          scheduleRepository,
+          clock,
+          idGenerator,
+        },
+        input,
+      );
+    },
     async updateTask(input) {
       return updateTaskUseCase(
         {
@@ -221,6 +236,9 @@ function getTaskPlatform(): TaskPlatform {
         },
         {},
       );
+    },
+    async getWorkLogs(taskIds: string[]) {
+      return workLogRepository.listByTaskIds(taskIds);
     },
   };
 

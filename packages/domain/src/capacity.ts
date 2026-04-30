@@ -14,7 +14,7 @@ export function createDayCapacity(input: {
   }
 
   const bufferMinutes =
-    input.bufferMinutes ?? Math.round(input.availableMinutes * 0.2);
+    input.bufferMinutes ?? 0;
 
   if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0) {
     throw new Error("bufferMinutes must be zero or positive");

@@ -1,11 +1,15 @@
 import React from "react";
 import { PlanningAlert } from "../components/planning-alert";
 import { StatusBadge } from "../components/status-badge";
-import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { WorkLogDialog } from "../components/work-log-dialog";
 import { taskPlatform } from "../lib/task-platform";
-import { energyLabels, formatIsoDate, formatMinutes, taskTypeLabels } from "../lib/presentation";
+import {
+  energyLabels,
+  formatHoursFromMinutes,
+  formatIsoDate,
+  taskTypeLabels,
+} from "../lib/presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +33,7 @@ export default async function HomePage() {
     title: string;
     taskType?: string;
     energy?: string;
+    remainingMinutes?: number;
   }>;
   const metrics = (await taskPlatform.getMetrics(today, today)) as {
     plannedMinutes: number;
@@ -43,10 +48,12 @@ export default async function HomePage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">今日</h1>
         <div className="flex flex-wrap gap-2">
-          <StatusBadge>{formatMinutes(metrics.plannedMinutes)}</StatusBadge>
-          <StatusBadge tone="secondary">{`実績 ${formatMinutes(metrics.actualMinutes)}`}</StatusBadge>
+          <StatusBadge>{formatHoursFromMinutes(metrics.plannedMinutes)}</StatusBadge>
+          <StatusBadge tone="secondary">
+            {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
+          </StatusBadge>
           <StatusBadge tone={schedule.activeProposalId ? "success" : "outline"}>
-            {schedule.activeProposalId ?? "未承認"}
+            {schedule.activeProposalId ? "承認済みの計画あり" : "未承認"}
           </StatusBadge>
         </div>
       </div>
@@ -72,7 +79,9 @@ export default async function HomePage() {
                       </CardTitle>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge>{formatIsoDate(slice.date ?? "unknown")}</StatusBadge>
-                        <StatusBadge tone="secondary">{formatMinutes(slice.planned_minutes ?? 0)}</StatusBadge>
+                        <StatusBadge tone="secondary">
+                          {formatHoursFromMinutes(slice.planned_minutes ?? 0)}
+                        </StatusBadge>
                         <StatusBadge tone="outline">
                           {taskTypeLabels[task?.taskType ?? "unknown"] ?? "未分類"}
                         </StatusBadge>
@@ -84,28 +93,14 @@ export default async function HomePage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <form
-                    action={`/api/tasks/${slice.task_id}/log-work`}
-                    className="grid gap-3 md:grid-cols-[140px_140px_minmax(0,1fr)_auto]"
-                    method="post"
-                  >
-                    <input name="date" type="hidden" value={slice.date ?? ""} />
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
-                      使った時間
-                      <Input min="1" name="spentMinutes" type="number" />
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
-                      残り時間
-                      <Input min="0" name="remainingMinutesAfter" type="number" />
-                    </label>
-                    <label className="grid gap-2 text-sm font-medium text-slate-700">
-                      メモ
-                      <Input name="note" />
-                    </label>
-                    <div className="flex items-end">
-                      <Button type="submit">記録</Button>
-                    </div>
-                  </form>
+                  <div className="flex justify-end">
+                    <WorkLogDialog
+                      date={slice.date ?? today}
+                      defaultRemainingHours={(task?.remainingMinutes ?? 0) / 60}
+                      taskId={slice.task_id ?? ""}
+                      title={task?.title ?? slice.task_id ?? "不明な task"}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             );

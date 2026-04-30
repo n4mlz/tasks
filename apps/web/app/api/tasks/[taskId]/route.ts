@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../../lib/task-platform";
+import { hoursToMinutes } from "../../../../lib/presentation";
 
 async function applyTaskUpdate(
   request: Request,
@@ -16,7 +17,9 @@ async function applyTaskUpdate(
     taskId: params.taskId,
     title: typeof json.title === "string" ? json.title : undefined,
     remainingMinutes:
-      json.remainingMinutes === undefined ? undefined : Number(json.remainingMinutes),
+      json.remainingMinutes === undefined
+        ? undefined
+        : hoursToMinutes(Number(json.remainingMinutes)),
     dueDate:
       json.dueDate === undefined
         ? undefined
