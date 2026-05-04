@@ -4,6 +4,7 @@ import {
   SqliteCapacityRepository,
   createDatabase,
   migrate,
+  SqliteMetricsRepository,
   SqliteScheduleRepository,
   SqliteTaskRepository,
 } from "../src/index";
@@ -65,14 +66,14 @@ describe("SQLite task repository", () => {
     ]);
   });
 
-  it("persists and reloads proposal summary details", async () => {
+  it("persists and reloads current schedule summary details", async () => {
     const db = createDatabase(":memory:");
     migrate(db);
 
     const repository = new SqliteScheduleRepository(db);
 
-    await repository.savePendingProposal({
-      id: "proposal_repo",
+    await repository.saveCurrentSchedule({
+      id: "schedule_repo",
       reason: "manual",
       generatedAt: "2026-04-27T00:00:00.000Z",
       horizonStart: "2026-04-27",
@@ -88,9 +89,9 @@ describe("SQLite task repository", () => {
       },
     });
 
-    const loaded = await repository.findById("proposal_repo");
+    const loaded = await repository.getCurrentSchedule();
 
-    expect(loaded?.summary).toEqual({
+    expect(loaded.summary).toEqual({
       riskFlags: ["task_1:insufficient_capacity_before_due_date"],
       unscheduledTaskIds: ["task_1"],
       capacityPressureByDate: {
@@ -111,5 +112,18 @@ describe("SQLite task repository", () => {
     } finally {
       process.chdir(originalCwd);
     }
+  });
+
+  it("returns zero at-risk tasks when no current schedule exists yet", async () => {
+    const db = createDatabase(":memory:");
+    migrate(db);
+
+    const repository = new SqliteMetricsRepository(db);
+    const summary = await repository.getRangeSummary({
+      dateFrom: "2026-04-27",
+      dateTo: "2026-04-27",
+    });
+
+    expect(summary.atRiskTaskCount).toBe(0);
   });
 });

@@ -18,7 +18,15 @@ export function migrate(db: SqliteDatabase): void {
     db.exec(`ALTER TABLE tasks ADD COLUMN task_type TEXT NOT NULL DEFAULT 'unknown'`);
   }
 
+  if (!columnNames.has("cognitive_load")) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN cognitive_load TEXT NOT NULL DEFAULT 'unknown'`);
+  }
+
   if (!columnNames.has("energy")) {
     db.exec(`ALTER TABLE tasks ADD COLUMN energy TEXT NOT NULL DEFAULT 'unknown'`);
+  }
+
+  if (!columnNames.has("tags_json")) {
+    db.exec(`ALTER TABLE tasks ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'`);
   }
 }

@@ -2,16 +2,29 @@ import { z } from "zod";
 
 export const taskUrgencySchema = z.enum(["today", "soon", "normal"]);
 export const taskStatusSchema = z.enum(["inbox", "active", "done", "archived"]);
+export const taskTypeSchema = z.enum([
+  "implementation",
+  "writing",
+  "research",
+  "communication",
+  "memorization",
+  "admin",
+  "design",
+  "other",
+  "unknown",
+]);
+export const taskCognitiveLoadSchema = z.enum(["low", "medium", "high", "unknown"]);
+export const taskEnergySchema = z.enum(["low", "medium", "high", "unknown"]);
 
 export const createTaskInputSchema = z.object({
   title: z.string().min(1),
   remainingMinutes: z.number().int().positive(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   urgency: taskUrgencySchema.optional(),
-  taskType: z
-    .enum(["deep", "shallow", "admin", "research", "writing", "implementation", "unknown"])
-    .optional(),
-  energy: z.enum(["low", "medium", "high", "unknown"]).optional(),
+  taskType: taskTypeSchema.optional(),
+  cognitiveLoad: taskCognitiveLoadSchema.optional(),
+  energy: taskEnergySchema.optional(),
+  tags: z.array(z.string().min(1)).optional(),
   notes: z.string().optional(),
 });
 

@@ -17,7 +17,7 @@ export function PlanningAlert({
       <AlertTitle>余力時間が未設定の日があります</AlertTitle>
       <AlertDescription>
         直近 7 日で未設定の日付: {dates.join(", ")}
-        {compact ? "。" : "。計画画面で余力時間とバッファを入れると提案の精度が安定します。"}
+        {compact ? "。" : "。計画画面で余力時間を入れると自動再配分が安定します。"}
       </AlertDescription>
     </Alert>
   );

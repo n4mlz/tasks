@@ -1,13 +1,16 @@
 export type TaskStatus = "inbox" | "active" | "done" | "archived";
 export type TaskUrgency = "today" | "soon" | "normal";
 export type TaskType =
-  | "deep"
-  | "shallow"
-  | "admin"
-  | "research"
-  | "writing"
   | "implementation"
+  | "writing"
+  | "research"
+  | "communication"
+  | "memorization"
+  | "admin"
+  | "design"
+  | "other"
   | "unknown";
+export type TaskCognitiveLoad = "low" | "medium" | "high" | "unknown";
 export type TaskEnergy = "low" | "medium" | "high" | "unknown";
 
 export interface Task {
@@ -19,7 +22,9 @@ export interface Task {
   dueDate: string | null;
   urgency: TaskUrgency;
   taskType: TaskType;
+  cognitiveLoad: TaskCognitiveLoad;
   energy: TaskEnergy;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -33,7 +38,9 @@ export interface CreateTaskInput {
   notes?: string;
   urgency?: TaskUrgency;
   taskType?: TaskType;
+  cognitiveLoad?: TaskCognitiveLoad;
   energy?: TaskEnergy;
+  tags?: string[];
   status?: TaskStatus;
 }
 
@@ -61,7 +68,9 @@ export function createTask(input: CreateTaskInput): Task {
     dueDate: input.dueDate ?? null,
     urgency: input.urgency ?? "normal",
     taskType: input.taskType ?? "unknown",
+    cognitiveLoad: input.cognitiveLoad ?? "unknown",
     energy: input.energy ?? "unknown",
+    tags: input.tags ?? [],
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
   };

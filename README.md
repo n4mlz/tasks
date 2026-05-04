@@ -1,66 +1,84 @@
 # Task Platform
 
-Task Platform は、個人のタスク管理を「考える時間」と「実行する時間」に分けるための MVP です。  
-思いついたタスクを inbox に入れ、各日の余力と残り見積もりからスケジュール案を作り、人間が承認してからその日の実行計画に反映します。
+Task Platform は、個人のタスク管理を `考える面` と `進める面` に分けるための Web ファーストな個人用基盤です。  
+思いついた task を `Inbox` に入れ、各日の余力時間と締切をもとにスケジュールし、毎日は `今日` だけ見て進めることを目的にしています。
 
-## このリポジトリの目的
+## 目的
 
-多くのタスク管理ツールは、タスクの登録までは支援しても、その後の「今日は何をやるべきか」「予定は安全か」「見積もりと余力は釣り合っているか」という判断を、結局ユーザーの頭の中に戻しがちです。  
-このリポジトリは、その認知負荷を減らすための個人用タスク基盤を作ることを目的にしています。
+多くの task 管理では、登録した後の
 
-中核の思想は 2 つあります。
+- 今日は何を進めるべきか
+- 期限までに安全か
+- 余力時間と残り見積もりは釣り合っているか
 
-- control plane
-  - タスクの追加、残り見積もりの更新、期限や urgency の調整、各日の余力設定のような「計画を整える操作」を扱います。
-- data plane
-  - 承認済みの計画を見て、その日やることを実行するための面です。理想は「今日は `Today` を見ればよい」状態です。
+を結局ユーザーが頭の中で考え続ける必要があります。
 
-この分離で目指しているのは、次の運用です。
+このリポジトリは、その認知負荷を減らすために次を目指しています。
 
-- 思いついたタスクはすぐ inbox に入れて、頭の中に持ち続けない
-- どのタスクをどの日に置くかは、残り見積もり、期限、capacity、buffer を使ってシステム側で案を作る
-- スケジュール変更は即時反映せず、必ず `proposal` として提示する
-- 人間は proposal の差分や risk を見て承認する
-- 日々の実行時は `Today` を見て進め、実績や残り見積もりの変化だけを返す
+- 思いついた task をすぐ外に出す
+- 各日の余力時間を Web で管理する
+- task の性質を LLM に推定させる
+- スケジュールの再配分をシステム側で行う
+- 毎日の実行時は `今日` だけ見ればよい状態に近づける
 
-つまり、このプロジェクトは単なるタスク保存アプリではなく、
+## 現在の構成
 
-- 未完了タスクをワーキングメモリから外す
-- 日次計画の生成を手作業から切り離す
-- エージェントの支援を使いつつ、最終決定権は人間に残す
+このプロジェクトでは、LLM の役割を 2 つに分けています。
 
-ための基盤です。
+- `MCP`
+  - 外部エージェントが app の状態を読む/更新するための面です。
+  - OpenClaw や Hermes Agent が task の進み具合、余力時間、metrics を確認する用途を想定しています。
+- `app 内部 LLM`
+  - app 自身が task の性質推定と再配分に使う面です。
+  - `.env` で指定した OpenAI 互換 endpoint、または OpenAI / Anthropic provider に接続できます。
 
-MCP を前提にしているのもそのためです。  
-Web UI と MCP サーバーが同じアプリケーション層を使うことで、ブラウザでもエージェントでも同じルールで扱えます。エージェントは task 作成、capacity 更新、proposal 生成、状況要約を支援できますが、計画の確定を勝手に行わないように設計されています。
+つまり、
+
+- `LLM -> app` は MCP
+- `app -> LLM` は内部 planner
+
+という分離です。
 
 ## できること
 
-現時点の MVP では次を扱えます。
+現時点では次が動きます。
 
-- タスクを inbox に追加する
-- タスクの残り見積もりや状態を更新する
-- 日ごとの available minutes / buffer minutes を保存する
-- スケジュール案を生成する
-- pending proposal を確認して承認する
-- 現在の計画と簡単な metrics を確認する
-- MCP tools 経由で同じ操作を呼び出す
+- `Inbox` で task を追加する
+- task 追加後、落ち着いたタイミングで LLM または fallback で
+  - `taskType`
+  - `cognitiveLoad`
+  - `energy`
+  - `tags`
+  を推定する
+- 推定結果を使って current schedule を自動再計算する
+- task のタイトル、必要な時間、期限、状態、メモを更新する
+- task を削除する
+- 日ごとの余力時間を月カレンダー上で編集する
+- `今日` 画面から作業記録を入力する
+- `最後に再配分した時刻` と `次回あと何分で再配分するか` を見る
+- `ログ` 画面で変更履歴と再配分履歴を見る
+- `今日` と `計画` で current schedule と基本 metrics を見る
+- MCP tools から task / capacity / metrics / current schedule / planning health にアクセスする
 
-## 画面構成
+## 画面
 
-Web UI には 4 つの画面があります。
+Web UI は現在 4 画面です。
 
-- `Today` (`/`)
-  - 承認済みの schedule slices を確認する画面です。
+- `今日` (`/`)
+  - 今日の task 列を見る画面です。
+  - `作業記録` モーダルから、進めた時間と残り時間を入力できます。
 - `Inbox` (`/inbox`)
-  - タスク追加と、登録済みタスクの一覧確認を行います。
-- `Week` (`/week`)
-  - 近況 metrics と capacity を確認します。
-- `Proposals` (`/proposals`)
-  - pending proposal を確認し、承認します。
+  - task を追加する画面です。
+  - 既存 task の編集と削除もここで行えます。
+- `計画` (`/week`)
+  - 月カレンダーで日ごとの余力時間を編集します。
+  - 横には task 一覧、残り時間、進捗率、見込み配分が出ます。
+- `ログ` (`/logs`)
+  - 何を変更したか、いつ自動再配分が走ったかを見る画面です。
+  - 検証エラーや再配分理由もここで確認できます。
 
-現状の UI は最小構成です。  
-日常運用では、ブラウザで確認しつつ MCP 対応エージェントと会話して操作する使い方を想定しています。
+`提案` 画面はありません。  
+以前の proposal 承認フローは廃止し、`一定時間変更が止まった後に自動で再配分する` 方式に置き換えています。
 
 ## リポジトリ構成
 
@@ -82,8 +100,8 @@ docs/
 
 ### 前提
 
-- Node.js が使えること
-- `pnpm` が使えること
+- Node.js
+- pnpm
 
 ### インストール
 
@@ -97,117 +115,160 @@ pnpm install
 pnpm dev
 ```
 
-このコマンドで次の 2 つをまとめて立ち上げます。
-
-- Web UI の開発サーバー
-- MCP 側の開発プロセス
-
-必要に応じて個別起動もできます。
+個別起動もできます。
 
 ```bash
 pnpm dev:web
 pnpm dev:mcp
 ```
 
-Web UI は通常 `http://localhost:3000` で開きます。
+通常、Web UI は `http://localhost:3000` で開きます。
 
-### データ保存先
+### DB
 
 SQLite ファイルはデフォルトでリポジトリ直下の `task-platform.db` に作られます。  
-別の場所を使いたい場合は `TASK_PLATFORM_DB` を指定してください。
+変更したい場合は `TASK_PLATFORM_DB` を指定します。
 
 ```bash
 TASK_PLATFORM_DB=/tmp/task-platform.db pnpm dev
 ```
 
+## LLM 設定
+
+app 内部 planner は、次の環境変数で provider を切り替えます。
+
+- `TASK_PLATFORM_LLM_PROVIDER`
+  - `openai-compatible`
+  - `openai`
+  - `anthropic`
+- `TASK_PLATFORM_LLM_MODEL`
+- `TASK_PLATFORM_LLM_BASE_URL`
+  - `openai-compatible` のときに使用
+- `TASK_PLATFORM_LLM_API_KEY`
+- `TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS`
+  - `true` / `false`
+
+### ローカル OpenAI 互換 LLM の例
+
+```bash
+TASK_PLATFORM_LLM_PROVIDER=openai-compatible
+TASK_PLATFORM_LLM_MODEL=your-local-model
+TASK_PLATFORM_LLM_BASE_URL=http://127.0.0.1:1234/v1
+TASK_PLATFORM_LLM_API_KEY=local
+TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS=true
+```
+
+この設定で、自動再配分時にローカル LLM へ structured output を要求します。  
+未設定の場合は heuristic fallback で簡易推定します。
+
 ## 最初の使い方
 
-最小フローは次の 4 ステップです。
+最小フローは次です。
 
-1. `Inbox` でタスクを登録する
-2. capacity を設定する
-3. schedule proposal を生成する
-4. `Proposals` で承認して `Today` を見る
+1. `計画` で日ごとの余力時間を入れる
+2. `Inbox` で task を追加する
+3. 変更が止まると自動再配分を待つ
+4. `今日` でその日の task を進める
+5. 作業後に `作業記録` を入れる
+6. `ログ` で変更履歴と再配分履歴を見る
 
-`Inbox` は UI からそのまま触れます。  
-capacity の更新や proposal の確認は、MCP 導入後にエージェントへ依頼する運用と相性が良いです。
+## 運用イメージ
 
-## 利用例
+### task を追加する
 
-### 1. タスクを inbox に入れる
+`Inbox` では次を入力します。
 
-たとえば、MCP をつないだエージェントに次のように依頼します。
+- タイトル
+- 必要な時間
+- 期限
+- メモ
 
-> 「今週中にレポート下書きを 2 時間進めたい。task を追加して」
+その後 `追加` を押すと、
 
-エージェントは `task_create` を使って inbox に登録し、必要なら続けて schedule 生成まで補助します。
+- 変更が保存され
+- 一定時間変更が止まると task の性質推定
+- current schedule の再計算
+- 必要時間・期限・余力時間に矛盾がないかの validation
 
-### 2. 1 日の余力を更新する
+をバックグラウンドで行います。
 
-> 「今日は 4 時間使えて、30 分はバッファにしたい。capacity を更新して」
+### 余力時間を入れる
 
-エージェントは `capacity_set` を使って、その日の available minutes と buffer minutes を反映します。
+`計画` 画面の月カレンダーから日付を押すと、その日の余力時間をモーダルで編集できます。  
+ここで入れる値は、`その日に task に使える最大時間` です。
 
-### 3. proposal を作らせる
+変更後はすぐに重い推論をせず、最後の変更から 3 分以上経ってから自動再配分します。
 
-> 「今のタスクと余力で、最新の schedule proposal を作って」
+### 作業を記録する
 
-エージェントは `schedule_generate` を呼び、pending proposal を作成します。
+`今日` 画面の `作業記録` から、
 
-### 4. proposal を要約させてから承認する
+- 進めた時間
+- 残り時間
+- 完了扱いにするか
 
-> 「pending proposal を見て、今日に何が入ったかと risk flags を要約して」
+を入力できます。  
+保存後は変更履歴に積まれ、落ち着いたタイミングで自動再配分されます。
 
-エージェントは `schedule_list_proposals` と `schedule_get_proposal` を使って内容を説明できます。  
-そのうえで、人間がブラウザの `/proposals` を見て承認する、という流れを想定しています。
+### 自動再配分
 
-### 5. 今日やることを確認する
+自動再配分は即時ではなく、次の条件で走ります。
 
-> 「今日やるべき内容を短くまとめて」
+- 何らかの変更が入っている
+- 最後の変更から 3 分以上経過している
+- その変更 revision に対してまだ再配分していない
 
-エージェントは承認済み schedule を読み、`Today` 画面と同じ前提で当日の実行内容を要約できます。
+再配分中にさらに変更が入った場合、その実行結果は current schedule に採用せず、`再実行待ち` のまま次の tick に回します。
+
+### ログ
+
+`ログ` 画面では次を確認できます。
+
+- task 追加、編集、削除
+- 余力時間の編集
+- 作業記録の追加
+- 自動再配分の実行履歴
+- 検証エラーや実行エラー
 
 ## MCP 連携
 
-このリポジトリは MCP 対応エージェントから使う前提で作られています。  
-MCP 側では、Web UI と同じアプリケーション層を呼びます。
+MCP は外部エージェントが app の状態を読む/操作するための面です。  
+現在の tool は次です。
 
-代表的な tools は次のとおりです。
-
-- task 操作
+- task
   - `task_create`
   - `tasks_list`
   - `task_update`
   - `task_log_work`
-- capacity 操作
+- capacity
   - `capacity_get`
   - `capacity_set`
-- schedule 操作
-  - `schedule_generate`
+- schedule
   - `schedule_get_current`
-  - `schedule_list_proposals`
-  - `schedule_get_proposal`
-  - `schedule_approve`
-  - `schedule_reject`
 - metrics
   - `metrics_get`
+  - `planning_health_get`
 
-### MCP での使い方イメージ
+### 想定用途
 
-- エージェントが `task_create` で inbox に入れる
-- `capacity_set` でその日の余力を更新する
-- `schedule_generate` で proposal を作る
-- `schedule_list_proposals` と `schedule_get_proposal` で内容を要約する
-- 最後の承認は人間が判断する
+- Hermes Agent が task の増減や進み具合を確認する
+- OpenClaw が metrics を読み、日次/週次の振り返りを支援する
+- エージェントが `capacity` や task 更新を補助する
 
-この「生成は自動、反映は人間承認」という構造が、このプロジェクトの重要な前提です。  
-README 上の利用例も、HTTP API を直接叩くより、MCP を通してエージェントに補助させる日常運用を基準にしています。
+MCP 側は監視面・操作面であり、task 性質推定や自動再配分そのものは app 内部 LLM が担当します。
+
+## 開発用コマンド
+
+```bash
+pnpm test
+pnpm --filter mcp build
+pnpm --filter web build
+```
+
+補足として、`web build` では `workspace-path.ts` 起因の NFT trace warning が出ることがありますが、現状 build 自体は通ります。
 
 ## 補足
 
-- `pnpm test`
-  - テスト一式を実行します。
-- `pnpm build`
-  - 全ワークスペースをビルドします。
+詳細な設計メモは以下を参照してください。
 
-詳細な設計意図を追いたい場合は [docs/superpowers/specs/2026-04-27-task-platform-design.md](docs/superpowers/specs/2026-04-27-task-platform-design.md) を参照してください。
+- [docs/superpowers/specs/2026-04-27-task-platform-design.md](docs/superpowers/specs/2026-04-27-task-platform-design.md)

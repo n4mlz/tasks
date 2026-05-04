@@ -1,5 +1,6 @@
 import React, { type ReactNode } from "react";
 import { NavLinks } from "./nav-links";
+import { SchedulerStatus } from "./scheduler-status";
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -12,6 +13,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           <span className="mr-3 text-sm font-semibold tracking-[-0.02em] text-slate-900">Task Platform</span>
           <NavLinks />
         </nav>
+        <div className="mt-2">
+          <SchedulerStatus />
+        </div>
       </header>
       <main className="flex-1">{children}</main>
     </div>

@@ -8,7 +8,7 @@ export interface ScheduledSlice {
   kind: "focus" | "buffer_fill";
 }
 
-export interface DomainScheduleProposal {
+export interface DomainSchedulePlan {
   horizonStart: string;
   horizonEnd: string;
   slices: ScheduledSlice[];
@@ -20,17 +20,55 @@ export interface DomainScheduleProposal {
   };
 }
 
+export type DomainScheduleProposal = DomainSchedulePlan;
+export interface ScheduleValidationResult {
+  isValid: boolean;
+  errors: string[];
+}
+
 export function usableMinutesForDay(capacity: DayCapacity): number {
   return Math.max(capacity.availableMinutes - capacity.bufferMinutes, 0);
 }
 
-export function buildScheduleProposal(input: {
+function burdenScore(task: Task): number {
+  const energyScore = {
+    low: 1,
+    medium: 2,
+    high: 3,
+    unknown: 2,
+  }[task.energy];
+  const cognitiveScore = {
+    low: 1,
+    medium: 2,
+    high: 3,
+    unknown: 2,
+  }[task.cognitiveLoad];
+  const taskTypeScore = {
+    implementation: 2,
+    writing: 2,
+    research: 3,
+    communication: 1,
+    memorization: 2,
+    admin: 1,
+    design: 2,
+    other: 1,
+    unknown: 1,
+  }[task.taskType];
+
+  return energyScore + cognitiveScore + taskTypeScore;
+}
+
+export function buildSchedulePlan(input: {
   today: string;
   tasks: Task[];
   capacities: DayCapacity[];
-}): DomainScheduleProposal {
+  priorityOrder?: string[];
+}): DomainSchedulePlan {
   const dayCapacities = new Map(
     input.capacities.map((capacity) => [capacity.date, usableMinutesForDay(capacity)]),
+  );
+  const priorityOrder = new Map(
+    (input.priorityOrder ?? []).map((taskId, index) => [taskId, index]),
   );
 
   const sortedTasks = [...input.tasks].sort((left, right) => {
@@ -39,16 +77,25 @@ export function buildScheduleProposal(input: {
     if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate);
     if (left.dueDate) return -1;
     if (right.dueDate) return 1;
-    const leftDeep = left.taskType === "deep" || left.energy === "high";
-    const rightDeep = right.taskType === "deep" || right.energy === "high";
-    if (leftDeep && !rightDeep) return -1;
-    if (!leftDeep && rightDeep) return 1;
+    const leftPriority = priorityOrder.get(left.id);
+    const rightPriority = priorityOrder.get(right.id);
+    if (leftPriority !== undefined && rightPriority !== undefined && leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+    if (leftPriority !== undefined) return -1;
+    if (rightPriority !== undefined) return 1;
+
+    const leftBurden = burdenScore(left);
+    const rightBurden = burdenScore(right);
+    if (leftBurden !== rightBurden) return rightBurden - leftBurden;
+
     return left.createdAt.localeCompare(right.createdAt);
   });
 
   const dayBudgets = new Map(
     input.capacities.map((capacity) => [capacity.date, usableMinutesForDay(capacity)]),
   );
+  const dayLoadScores = new Map(input.capacities.map((capacity) => [capacity.date, 0]));
 
   const slices: ScheduledSlice[] = [];
   const riskFlags: string[] = [];
@@ -56,22 +103,28 @@ export function buildScheduleProposal(input: {
 
   for (const task of sortedTasks) {
     let remaining = task.remainingMinutes;
+    const taskBurden = burdenScore(task);
     const candidateDays = [...input.capacities]
       .sort((left, right) => {
-        const leftScore = dayCapacities.get(left.date) ?? 0;
-        const rightScore = dayCapacities.get(right.date) ?? 0;
-        const prefersBiggerDays =
-          task.taskType === "deep" ||
-          task.taskType === "research" ||
-          task.taskType === "writing" ||
-          task.taskType === "implementation" ||
-          task.energy === "high";
+        const leftBudget = dayCapacities.get(left.date) ?? 0;
+        const rightBudget = dayCapacities.get(right.date) ?? 0;
+        const leftLoad = dayLoadScores.get(left.date) ?? 0;
+        const rightLoad = dayLoadScores.get(right.date) ?? 0;
+        const prefersLighterDays = taskBurden >= 6;
 
-        if (prefersBiggerDays && leftScore !== rightScore) {
-          return rightScore - leftScore;
+        if (prefersLighterDays && leftLoad !== rightLoad) {
+          return leftLoad - rightLoad;
         }
 
-        return left.date.localeCompare(right.date);
+        if (prefersLighterDays && leftBudget !== rightBudget) {
+          return rightBudget - leftBudget;
+        }
+
+        if (!prefersLighterDays && left.date !== right.date) {
+          return left.date.localeCompare(right.date);
+        }
+
+        return rightBudget - leftBudget;
       })
       .map((capacity) => capacity.date)
       .filter((date) => (task.dueDate ? date < task.dueDate : true));
@@ -90,6 +143,10 @@ export function buildScheduleProposal(input: {
         kind: "focus",
       });
       dayBudgets.set(date, budget - plannedMinutes);
+      dayLoadScores.set(
+        date,
+        (dayLoadScores.get(date) ?? 0) + Math.max(1, Math.ceil(plannedMinutes / 60)) * taskBurden,
+      );
       remaining -= plannedMinutes;
     }
 
@@ -120,5 +177,63 @@ export function buildScheduleProposal(input: {
       unscheduledTaskIds,
       capacityPressureByDate,
     },
+  };
+}
+
+export const buildScheduleProposal = buildSchedulePlan;
+
+export function validateSchedulePlan(input: {
+  plan: DomainSchedulePlan;
+  tasks: Task[];
+  capacities: DayCapacity[];
+}): ScheduleValidationResult {
+  const errors: string[] = [];
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
+  const capacityByDate = new Map(
+    input.capacities.map((capacity) => [capacity.date, usableMinutesForDay(capacity)]),
+  );
+  const taskTotals = new Map<string, number>();
+  const dayTotals = new Map<string, number>();
+
+  for (const slice of input.plan.slices) {
+    const task = taskById.get(slice.taskId);
+    if (!task) {
+      errors.push(`unknown_task:${slice.taskId}`);
+      continue;
+    }
+
+    if (!capacityByDate.has(slice.date)) {
+      errors.push(`unknown_date:${slice.date}`);
+    }
+
+    if (slice.plannedMinutes <= 0) {
+      errors.push(`non_positive_slice:${slice.taskId}:${slice.date}`);
+    }
+
+    taskTotals.set(slice.taskId, (taskTotals.get(slice.taskId) ?? 0) + slice.plannedMinutes);
+    dayTotals.set(slice.date, (dayTotals.get(slice.date) ?? 0) + slice.plannedMinutes);
+
+    if (task.dueDate && slice.date >= task.dueDate) {
+      errors.push(`past_due_slice:${slice.taskId}:${slice.date}`);
+    }
+  }
+
+  for (const task of input.tasks) {
+    const planned = taskTotals.get(task.id) ?? 0;
+    if (planned < task.remainingMinutes) {
+      errors.push(`insufficient_task_minutes:${task.id}`);
+    }
+  }
+
+  for (const [date, planned] of dayTotals.entries()) {
+    const usable = capacityByDate.get(date) ?? 0;
+    if (planned > usable) {
+      errors.push(`over_capacity:${date}`);
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
   };
 }

@@ -1,18 +1,15 @@
-import { buildScheduleProposal } from "@task-platform/domain";
 import type {
-  CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
+  SchedulerStateRepository,
   TaskRepository,
 } from "../ports";
-import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function deleteTaskUseCase(
   deps: {
     taskRepository: Pick<TaskRepository, "findById" | "delete" | "listSchedulable">;
-    capacityRepository: Pick<CapacityRepository, "listBetween">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -24,27 +21,15 @@ export async function deleteTaskUseCase(
   }
 
   await deps.taskRepository.delete(input.taskId);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const horizon = selectScheduleHorizon({
-    today: deps.clock.today(),
-    tasks,
-  });
-  const capacities = expandCapacityWindow({
-    dateFrom: horizon.start,
-    dateTo: horizon.end,
-    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
-  });
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "task_updated",
-    generatedAt: deps.clock.now(),
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "task_deleted",
+    entityType: "task",
+    entityId: task.id,
+    details: {
+      title: task.title,
+    },
   });
 }

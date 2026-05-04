@@ -28,7 +28,11 @@ async function applyTaskUpdate(
           : String(json.dueDate),
     urgency: json.urgency,
     taskType: json.taskType,
+    cognitiveLoad: json.cognitiveLoad,
     energy: json.energy,
+    tags: Array.isArray(json.tags)
+      ? json.tags.filter((value: unknown): value is string => typeof value === "string")
+      : undefined,
     status: json.status,
     notes: typeof json.notes === "string" ? json.notes : undefined,
   });

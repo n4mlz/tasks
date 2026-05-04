@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { WorkLogDialog } from "../components/work-log-dialog";
 import { taskPlatform } from "../lib/task-platform";
 import {
+  cognitiveLoadLabels,
   energyLabels,
   formatHoursFromMinutes,
   formatIsoDate,
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const today = new Date().toISOString().slice(0, 10);
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
-    activeProposalId: string | null;
+    activeScheduleId: string | null;
     slices: Array<{
       task_id?: string;
       date?: string;
@@ -32,7 +33,9 @@ export default async function HomePage() {
     id: string;
     title: string;
     taskType?: string;
+    cognitiveLoad?: string;
     energy?: string;
+    tags?: string[];
     remainingMinutes?: number;
   }>;
   const metrics = (await taskPlatform.getMetrics(today, today)) as {
@@ -52,8 +55,8 @@ export default async function HomePage() {
           <StatusBadge tone="secondary">
             {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
           </StatusBadge>
-          <StatusBadge tone={schedule.activeProposalId ? "success" : "outline"}>
-            {schedule.activeProposalId ? "承認済みの計画あり" : "未承認"}
+          <StatusBadge tone={schedule.activeScheduleId ? "success" : "outline"}>
+            {schedule.activeScheduleId ? "計画あり" : "まだ未計画"}
           </StatusBadge>
         </div>
       </div>
@@ -86,8 +89,16 @@ export default async function HomePage() {
                           {taskTypeLabels[task?.taskType ?? "unknown"] ?? "未分類"}
                         </StatusBadge>
                         <StatusBadge tone="outline">
+                          {cognitiveLoadLabels[task?.cognitiveLoad ?? "unknown"] ?? "未設定"}
+                        </StatusBadge>
+                        <StatusBadge tone="outline">
                           {energyLabels[task?.energy ?? "unknown"] ?? "未設定"}
                         </StatusBadge>
+                        {task?.tags?.map((tag) => (
+                          <StatusBadge key={tag} tone="outline">
+                            {tag}
+                          </StatusBadge>
+                        ))}
                       </div>
                     </div>
                   </div>

@@ -1,18 +1,16 @@
-import { buildScheduleProposal, createTask } from "@task-platform/domain";
+import { createTask } from "@task-platform/domain";
 import type {
-  CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
+  SchedulerStateRepository,
   TaskRepository,
 } from "../ports";
-import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function createTaskUseCase(
   deps: {
     taskRepository: Pick<TaskRepository, "save">;
-    capacityRepository: Pick<CapacityRepository, "listBetween">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -21,8 +19,19 @@ export async function createTaskUseCase(
     remainingMinutes: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
-    taskType?: "deep" | "shallow" | "admin" | "research" | "writing" | "implementation" | "unknown";
+    taskType?:
+      | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
+      | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
     energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     notes?: string;
   },
 ): Promise<void> {
@@ -34,33 +43,25 @@ export async function createTaskUseCase(
     dueDate: input.dueDate,
     urgency: input.urgency,
     taskType: input.taskType,
+    cognitiveLoad: input.cognitiveLoad,
     energy: input.energy,
+    tags: input.tags,
     notes: input.notes,
     createdAt,
   });
 
   await deps.taskRepository.save(task);
-
-  const horizon = selectScheduleHorizon({
-    today: deps.clock.today(),
-    tasks: [task],
-  });
-  const capacities = expandCapacityWindow({
-    dateFrom: horizon.start,
-    dateTo: horizon.end,
-    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
-  });
-
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks: [task],
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "task_created",
-    generatedAt: createdAt,
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "task_created",
+    entityType: "task",
+    entityId: task.id,
+    details: {
+      title: task.title,
+      dueDate: task.dueDate,
+      remainingMinutes: task.remainingMinutes,
+    },
   });
 }

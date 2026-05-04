@@ -5,24 +5,47 @@ import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 type ModalProps = {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   title: string;
   description?: string;
   children: React.ReactNode;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function Modal({ trigger, title, description, children, className }: ModalProps) {
-  const [open, setOpen] = React.useState(false);
-  const triggerNode = React.isValidElement(trigger)
-    ? React.cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
-        onClick: () => setOpen(true),
-      })
-    : (
-      <button onClick={() => setOpen(true)} type="button">
-        {trigger}
-      </button>
-    );
+export function Modal({
+  trigger,
+  title,
+  description,
+  children,
+  className,
+  open: controlledOpen,
+  onOpenChange,
+}: ModalProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(next);
+      }
+      onOpenChange?.(next);
+    },
+    [controlledOpen, onOpenChange],
+  );
+  const triggerNode =
+    trigger === undefined
+      ? null
+      : React.isValidElement(trigger)
+        ? React.cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
+            onClick: () => setOpen(true),
+          })
+        : (
+          <button onClick={() => setOpen(true)} type="button">
+            {trigger}
+          </button>
+        );
 
   return (
     <>

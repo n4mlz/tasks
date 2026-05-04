@@ -8,7 +8,6 @@ export class SqliteMetricsRepository {
     actualMinutes: number;
     completedMinutes: number;
     atRiskTaskCount: number;
-    pendingProposalCount: number;
   }> {
     const plannedRow = this.db
       .prepare(
@@ -43,30 +42,23 @@ export class SqliteMetricsRepository {
     const riskRow = this.db
       .prepare(
         `
-          SELECT COUNT(*) AS at_risk_count
+          SELECT COALESCE(json_array_length(summary_json, '$.riskFlags'), 0) AS at_risk_count
           FROM schedule_proposals
-          WHERE status = 'pending'
-            AND json_extract(summary_json, '$.riskFlags[0]') IS NOT NULL
+          WHERE id = (
+            SELECT active_proposal_id
+            FROM schedule_snapshots
+            ORDER BY updated_at DESC
+            LIMIT 1
+          )
         `,
       )
-      .get() as { at_risk_count: number };
-
-    const pendingRow = this.db
-      .prepare(
-        `
-          SELECT COUNT(*) AS pending_count
-          FROM schedule_proposals
-          WHERE status = 'pending'
-        `,
-      )
-      .get() as { pending_count: number };
+      .get() as { at_risk_count: number } | undefined;
 
     return {
       plannedMinutes: Number(plannedRow.planned_minutes),
       actualMinutes: Number(actualRow.actual_minutes),
       completedMinutes: Number(completedRow.completed_minutes),
-      atRiskTaskCount: Number(riskRow.at_risk_count),
-      pendingProposalCount: Number(pendingRow.pending_count),
+      atRiskTaskCount: Number(riskRow?.at_risk_count ?? 0),
     };
   }
 }

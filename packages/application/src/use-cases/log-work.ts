@@ -1,20 +1,18 @@
-import { buildScheduleProposal, updateTaskEstimate } from "@task-platform/domain";
+import { updateTaskEstimate } from "@task-platform/domain";
 import type {
-  CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
+  SchedulerStateRepository,
   TaskRepository,
   WorkLogRepository,
 } from "../ports";
-import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function logWorkUseCase(
   deps: {
     taskRepository: Pick<TaskRepository, "findById" | "save" | "listSchedulable">;
     workLogRepository: WorkLogRepository;
-    capacityRepository: Pick<CapacityRepository, "listBetween">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -53,27 +51,17 @@ export async function logWorkUseCase(
   });
 
   await deps.taskRepository.save(savedTask);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const horizon = selectScheduleHorizon({
-    today: deps.clock.today(),
-    tasks,
-  });
-  const capacities = expandCapacityWindow({
-    dateFrom: horizon.start,
-    dateTo: horizon.end,
-    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
-  });
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "work_logged",
-    generatedAt: deps.clock.now(),
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "work_logged",
+    entityType: "task",
+    entityId: savedTask.id,
+    details: {
+      spentMinutes: input.spentMinutes,
+      remainingMinutesAfter: input.remainingMinutesAfter,
+      date: input.date,
+    },
   });
 }

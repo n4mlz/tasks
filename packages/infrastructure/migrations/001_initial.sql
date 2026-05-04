@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS tasks (
   due_date TEXT,
   urgency TEXT NOT NULL,
   task_type TEXT NOT NULL DEFAULT 'unknown',
+  cognitive_load TEXT NOT NULL DEFAULT 'unknown',
   energy TEXT NOT NULL DEFAULT 'unknown',
+  tags_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -53,4 +55,36 @@ CREATE TABLE IF NOT EXISTS schedule_snapshots (
   id TEXT PRIMARY KEY,
   active_proposal_id TEXT NOT NULL,
   updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS planning_state (
+  singleton_id TEXT PRIMARY KEY,
+  current_revision INTEGER NOT NULL,
+  last_scheduled_revision INTEGER NOT NULL,
+  last_mutation_at TEXT,
+  last_scheduled_at TEXT,
+  scheduler_status TEXT NOT NULL,
+  running_revision INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS planning_mutations (
+  id TEXT PRIMARY KEY,
+  revision INTEGER NOT NULL,
+  mutation_kind TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  created_at TEXT NOT NULL,
+  details_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS schedule_runs (
+  id TEXT PRIMARY KEY,
+  target_revision INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  rationale TEXT NOT NULL,
+  validation_json TEXT NOT NULL,
+  error_message TEXT NOT NULL
 );

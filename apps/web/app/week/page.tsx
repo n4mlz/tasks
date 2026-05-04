@@ -13,6 +13,7 @@ import {
 } from "../../components/ui/table";
 import { taskPlatform } from "../../lib/task-platform";
 import {
+  cognitiveLoadLabels,
   energyLabels,
   formatCompletionRate,
   formatHoursFromMinutes,
@@ -91,14 +92,14 @@ export default async function WeekPage(props: {
   const metrics = (await taskPlatform.getMetrics(monthStart, monthEnd)) as {
     plannedMinutes: number;
     actualMinutes: number;
-    pendingProposalCount: number;
+    atRiskTaskCount: number;
   };
   const planningHealth = (await taskPlatform.getPlanningHealth()) as {
     missingCapacityDatesWithin7Days: string[];
     warningCount: number;
   };
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
-    activeProposalId: string | null;
+    activeScheduleId: string | null;
     slices: Array<{
       task_id?: string;
       date?: string;
@@ -112,7 +113,9 @@ export default async function WeekPage(props: {
     dueDate: string | null;
     status: string;
     taskType?: string;
+    cognitiveLoad?: string;
     energy?: string;
+    tags?: string[];
   }>;
   const workLogs = (await taskPlatform.getWorkLogs(tasks.map((task) => task.id))) as Array<{
     taskId: string;
@@ -197,8 +200,8 @@ export default async function WeekPage(props: {
           <StatusBadge tone="secondary">
             {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
           </StatusBadge>
-          <StatusBadge tone={metrics.pendingProposalCount > 0 ? "warning" : "outline"}>
-            {`提案 ${metrics.pendingProposalCount}`}
+          <StatusBadge tone={metrics.atRiskTaskCount > 0 ? "warning" : "outline"}>
+            {`注意 ${metrics.atRiskTaskCount}`}
           </StatusBadge>
         </div>
       </div>
@@ -241,11 +244,21 @@ export default async function WeekPage(props: {
                                 {taskTypeLabels[task.taskType] ?? task.taskType}
                               </StatusBadge>
                             ) : null}
+                            {task.cognitiveLoad && task.cognitiveLoad !== "unknown" ? (
+                              <StatusBadge tone="outline">
+                                {cognitiveLoadLabels[task.cognitiveLoad] ?? task.cognitiveLoad}
+                              </StatusBadge>
+                            ) : null}
                             {task.energy && task.energy !== "unknown" ? (
                               <StatusBadge tone="outline">
                                 {energyLabels[task.energy] ?? task.energy}
                               </StatusBadge>
                             ) : null}
+                            {task.tags?.map((tag) => (
+                              <StatusBadge key={tag} tone="outline">
+                                {tag}
+                              </StatusBadge>
+                            ))}
                           </div>
                           {task.upcomingSchedule.length > 0 ? (
                             <div className="text-xs text-slate-500">

@@ -11,7 +11,6 @@ const { taskPlatformMock } = vi.hoisted(() => ({
     getPlanningHealth: vi.fn(),
     getCapacities: vi.fn(),
     getMetrics: vi.fn(),
-    listProposals: vi.fn(),
     getWorkLogs: vi.fn(),
   },
 }));
@@ -22,6 +21,9 @@ vi.mock("../lib/task-platform", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/inbox",
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
 }));
 
 import InboxPage from "../app/inbox/page";
@@ -31,15 +33,35 @@ describe("Inbox flow", () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-28T09:00:00.000Z"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: {
+            currentRevision: 1,
+            lastScheduledRevision: 1,
+            lastMutationAt: null,
+            lastScheduledAt: "2026-04-28T08:30:00.000Z",
+            schedulerStatus: "idle",
+            runningRevision: null,
+            hasPendingChanges: false,
+            nextRunAt: null,
+            secondsUntilNextRun: null,
+          },
+        }),
+      }),
+    );
 
     taskPlatformMock.listTasks.mockResolvedValue([]);
     taskPlatformMock.getCurrentSchedule.mockResolvedValue({
-      activeProposalId: "proposal_1",
+      activeScheduleId: "schedule_1",
       slices: [],
     });
     taskPlatformMock.getPlanningHealth.mockResolvedValue({
@@ -52,7 +74,6 @@ describe("Inbox flow", () => {
       actualMinutes: 45,
       completedMinutes: 0,
       atRiskTaskCount: 1,
-      pendingProposalCount: 1,
     });
     taskPlatformMock.getWorkLogs.mockResolvedValue([]);
   });

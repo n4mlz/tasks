@@ -20,7 +20,16 @@ export async function POST(request: Request) {
     dueDate: typeof json.dueDate === "string" && json.dueDate ? json.dueDate : undefined,
     urgency: json.urgency,
     taskType: json.taskType,
+    cognitiveLoad: json.cognitiveLoad,
     energy: json.energy,
+    tags: Array.isArray(json.tags)
+      ? json.tags.filter((value: unknown): value is string => typeof value === "string")
+      : typeof json.tags === "string" && json.tags
+        ? String(json.tags)
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined,
     notes: typeof json.notes === "string" ? json.notes : undefined,
   };
 

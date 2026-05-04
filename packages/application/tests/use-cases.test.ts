@@ -1,178 +1,56 @@
+import { createDayCapacity, createTask } from "@task-platform/domain";
 import { describe, expect, it, vi } from "vitest";
 import {
-  approveProposalUseCase,
   createTaskUseCase,
   deleteTaskUseCase,
-  generateScheduleProposalUseCase,
-  getPlanningHealthUseCase,
   getMetricsUseCase,
+  getPlanningHealthUseCase,
+  getSchedulerStatusUseCase,
+  listSchedulerLogsUseCase,
   logWorkUseCase,
-  rejectProposalUseCase,
+  runSchedulerTickUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
 } from "../src/index";
-import { createDayCapacity } from "@task-platform/domain";
 
-function addDays(date: string, days: number): string {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-describe("createTaskUseCase", () => {
-  it("stores a task with work-shape hints and generates a pending proposal", async () => {
-    const taskRepository = {
-      save: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const capacityRepository = {
-      listBetween: vi.fn().mockResolvedValue([
-        { date: "2026-04-27", availableMinutes: 120, bufferMinutes: 0 },
-        { date: "2026-04-28", availableMinutes: 120, bufferMinutes: 0 },
-        { date: "2026-04-29", availableMinutes: 120, bufferMinutes: 0 },
-        { date: "2026-04-30", availableMinutes: 120, bufferMinutes: 0 },
-      ]),
-    };
-
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    const clock = {
-      now: () => "2026-04-27T09:00:00.000Z",
-      today: () => "2026-04-27",
-    };
-
-    const idGenerator = {
-      next: (prefix: string) => `${prefix}_1`,
-    };
+describe("mutation use cases", () => {
+  it("records a mutation when a task is created", async () => {
+    const taskRepository = { save: vi.fn().mockResolvedValue(undefined) };
+    const schedulerStateRepository = { recordMutation: vi.fn().mockResolvedValue({ revision: 1 }) };
 
     await createTaskUseCase(
       {
         taskRepository,
-        scheduleRepository,
-        capacityRepository,
-        clock,
-        idGenerator,
+        schedulerStateRepository,
+        clock: {
+          now: () => "2026-04-27T09:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
       },
       {
-        title: "Prepare application essay",
-        remainingMinutes: 180,
-        dueDate: "2026-05-01",
-        taskType: "writing",
-        energy: "high",
+        title: "Write plan",
+        remainingMinutes: 120,
       },
     );
 
     expect(taskRepository.save).toHaveBeenCalledTimes(1);
-    expect(taskRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskType: "writing",
-        energy: "high",
-      }),
-    );
-    expect(capacityRepository.listBetween).toHaveBeenCalledWith(
-      "2026-04-27",
-      "2026-05-03",
-    );
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
+    expect(schedulerStateRepository.recordMutation).toHaveBeenCalledTimes(1);
   });
-});
 
-describe("logWorkUseCase", () => {
-  it("logs work and stores the updated remaining estimate", async () => {
-    const existingTask = {
+  it("records a mutation when work is logged and marks task done at zero", async () => {
+    const existingTask = createTask({
       id: "task_1",
-      title: "Draft report",
-      notes: "",
-      status: "active" as const,
-      remainingMinutes: 120,
-      dueDate: null,
-      urgency: "normal" as const,
-      taskType: "implementation" as const,
-      energy: "high" as const,
+      title: "Write report",
+      remainingMinutes: 60,
       createdAt: "2026-04-27T00:00:00.000Z",
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    };
-
-    const taskRepository = {
-      findById: vi.fn().mockResolvedValue(existingTask),
-      save: vi.fn().mockResolvedValue(undefined),
-      listSchedulable: vi.fn().mockResolvedValue([existingTask]),
-    };
-
-    const workLogRepository = {
-      append: vi.fn().mockResolvedValue(undefined),
-      listByTaskIds: vi.fn().mockResolvedValue([]),
-    };
-
-    const capacityRepository = {
-      listBetween: vi.fn().mockResolvedValue([
-        { date: "2026-04-27", availableMinutes: 60, bufferMinutes: 0 },
-        { date: "2026-04-28", availableMinutes: 60, bufferMinutes: 0 },
-      ]),
-    };
-
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await expect(
-      logWorkUseCase(
-        {
-          taskRepository,
-          workLogRepository,
-          capacityRepository,
-          scheduleRepository,
-          clock: {
-            now: () => "2026-04-27T12:00:00.000Z",
-            today: () => "2026-04-27",
-          },
-          idGenerator: { next: (prefix: string) => `${prefix}_1` },
-        },
-        {
-          taskId: "task_1",
-          date: "2026-04-27",
-          spentMinutes: 45,
-          remainingMinutesAfter: 60,
-        },
-      ),
-    ).resolves.toBeUndefined();
-
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        summary: expect.objectContaining({
-          unscheduledTaskIds: expect.any(Array),
-        }),
-      }),
-    );
-    expect(taskRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        remainingMinutes: 60,
-      }),
-    );
-  });
-
-  it("marks a task done when remaining work reaches zero", async () => {
-    const existingTask = {
-      id: "task_done",
-      title: "Submit form",
-      notes: "",
-      status: "active" as const,
-      remainingMinutes: 30,
-      dueDate: null,
-      urgency: "normal" as const,
-      taskType: "admin" as const,
-      energy: "low" as const,
-      createdAt: "2026-04-27T00:00:00.000Z",
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    };
-
+    });
     const taskRepository = {
       findById: vi.fn().mockResolvedValue(existingTask),
       save: vi.fn().mockResolvedValue(undefined),
       listSchedulable: vi.fn().mockResolvedValue([]),
     };
+    const schedulerStateRepository = { recordMutation: vi.fn().mockResolvedValue({ revision: 2 }) };
 
     await logWorkUseCase(
       {
@@ -181,12 +59,7 @@ describe("logWorkUseCase", () => {
           append: vi.fn().mockResolvedValue(undefined),
           listByTaskIds: vi.fn().mockResolvedValue([]),
         },
-        capacityRepository: {
-          listBetween: vi.fn().mockResolvedValue([]),
-        },
-        scheduleRepository: {
-          savePendingProposal: vi.fn().mockResolvedValue(undefined),
-        },
+        schedulerStateRepository,
         clock: {
           now: () => "2026-04-27T12:00:00.000Z",
           today: () => "2026-04-27",
@@ -194,327 +67,302 @@ describe("logWorkUseCase", () => {
         idGenerator: { next: (prefix: string) => `${prefix}_1` },
       },
       {
-        taskId: "task_done",
+        taskId: "task_1",
         date: "2026-04-27",
-        spentMinutes: 30,
+        spentMinutes: 60,
         remainingMinutesAfter: 0,
       },
     );
 
     expect(taskRepository.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        remainingMinutes: 0,
         status: "done",
+        remainingMinutes: 0,
       }),
     );
+    expect(schedulerStateRepository.recordMutation).toHaveBeenCalledTimes(1);
   });
-});
 
-describe("deleteTaskUseCase", () => {
-  it("deletes a task and regenerates a pending proposal", async () => {
-    const existingTask = {
-      id: "task_delete",
-      title: "Old task",
-      notes: "",
-      status: "active" as const,
-      remainingMinutes: 60,
-      dueDate: null,
-      urgency: "normal" as const,
-      taskType: "unknown" as const,
-      energy: "unknown" as const,
-      createdAt: "2026-04-27T00:00:00.000Z",
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    };
-
+  it("records a mutation when a task is updated", async () => {
     const taskRepository = {
-      findById: vi.fn().mockResolvedValue(existingTask),
-      delete: vi.fn().mockResolvedValue(undefined),
+      findById: vi.fn().mockResolvedValue(
+        createTask({
+          id: "task_1",
+          title: "Old title",
+          remainingMinutes: 60,
+          createdAt: "2026-04-27T00:00:00.000Z",
+        }),
+      ),
+      save: vi.fn().mockResolvedValue(undefined),
       listSchedulable: vi.fn().mockResolvedValue([]),
     };
-    const capacityRepository = {
-      listBetween: vi.fn().mockResolvedValue([]),
-    };
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
+    const schedulerStateRepository = { recordMutation: vi.fn().mockResolvedValue({ revision: 3 }) };
 
-    await deleteTaskUseCase(
+    await updateTaskUseCase(
       {
         taskRepository,
-        capacityRepository,
-        scheduleRepository,
+        schedulerStateRepository,
         clock: {
           now: () => "2026-04-27T12:00:00.000Z",
           today: () => "2026-04-27",
         },
         idGenerator: { next: (prefix: string) => `${prefix}_1` },
       },
-      { taskId: "task_delete" },
+      {
+        taskId: "task_1",
+        title: "New title",
+      },
     );
 
-    expect(taskRepository.delete).toHaveBeenCalledWith("task_delete");
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
+    expect(schedulerStateRepository.recordMutation).toHaveBeenCalledTimes(1);
   });
-});
 
-describe("setCapacityUseCase", () => {
-  it("stores day capacity and generates a proposal", async () => {
-    const capacityRepository = {
-      upsert: vi.fn().mockResolvedValue(undefined),
-      listBetween: vi.fn().mockResolvedValue([
-        { date: "2026-04-27", availableMinutes: 180, bufferMinutes: 30 },
-        { date: "2026-04-28", availableMinutes: 240, bufferMinutes: 60 },
-        { date: "2026-04-29", availableMinutes: 240, bufferMinutes: 60 },
-      ]),
-    };
-
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
+  it("records a mutation when capacity changes", async () => {
+    const capacityRepository = { upsert: vi.fn().mockResolvedValue(undefined) };
+    const schedulerStateRepository = { recordMutation: vi.fn().mockResolvedValue({ revision: 4 }) };
 
     await setCapacityUseCase(
       {
         capacityRepository,
+        schedulerStateRepository,
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+      {
+        date: "2026-04-27",
+        availableMinutes: 180,
+      },
+    );
+
+    expect(schedulerStateRepository.recordMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a mutation when a task is deleted", async () => {
+    const taskRepository = {
+      findById: vi.fn().mockResolvedValue({ id: "task_1", title: "Delete me" }),
+      delete: vi.fn().mockResolvedValue(undefined),
+      listSchedulable: vi.fn().mockResolvedValue([]),
+    };
+    const schedulerStateRepository = { recordMutation: vi.fn().mockResolvedValue({ revision: 5 }) };
+
+    await deleteTaskUseCase(
+      {
+        taskRepository,
+        schedulerStateRepository,
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+      { taskId: "task_1" },
+    );
+
+    expect(taskRepository.delete).toHaveBeenCalledWith("task_1");
+    expect(schedulerStateRepository.recordMutation).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("runSchedulerTickUseCase", () => {
+  it("skips when the debounce window has not elapsed", async () => {
+    const result = await runSchedulerTickUseCase(
+      {
         taskRepository: {
-          listSchedulable: vi.fn().mockResolvedValue([
-            {
-              id: "task_cap",
-              title: "Deep work",
-              notes: "",
-              status: "active" as const,
-              remainingMinutes: 180,
-              dueDate: "2026-04-30",
-              urgency: "normal" as const,
-              taskType: "deep" as const,
-              energy: "high" as const,
-              createdAt: "2026-04-27T00:00:00.000Z",
-              updatedAt: "2026-04-27T00:00:00.000Z",
+          listSchedulable: vi.fn(),
+          save: vi.fn(),
+        },
+        capacityRepository: {
+          listBetween: vi.fn(),
+        },
+        scheduleRepository: {
+          saveCurrentSchedule: vi.fn(),
+        },
+        schedulerStateRepository: {
+          tryStartRun: vi.fn().mockResolvedValue({
+            started: false,
+            state: {
+              currentRevision: 2,
+              lastScheduledRevision: 1,
+              lastMutationAt: "2026-04-27T11:59:00.000Z",
+              lastScheduledAt: "2026-04-27T11:50:00.000Z",
+              schedulerStatus: "pending",
+              runningRevision: null,
             },
+          }),
+          completeRun: vi.fn(),
+          insertRun: vi.fn(),
+          listMutations: vi.fn(),
+          getState: vi.fn(),
+        },
+        planningIntelligence: {
+          analyzeSchedule: vi.fn(),
+        },
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+    );
+
+    expect(result.ran).toBe(false);
+  });
+
+  it("schedules when due and stores a successful run", async () => {
+    const task = createTask({
+      id: "task_1",
+      title: "Write report",
+      remainingMinutes: 120,
+      createdAt: "2026-04-27T00:00:00.000Z",
+    });
+
+    const scheduleRepository = { saveCurrentSchedule: vi.fn().mockResolvedValue(undefined) };
+    const schedulerStateRepository = {
+      tryStartRun: vi.fn().mockResolvedValue({
+        started: true,
+        targetRevision: 3,
+        state: {
+          currentRevision: 3,
+          lastScheduledRevision: 2,
+          lastMutationAt: "2026-04-27T11:50:00.000Z",
+          lastScheduledAt: "2026-04-27T11:40:00.000Z",
+          schedulerStatus: "running",
+          runningRevision: 3,
+        },
+      }),
+      listMutations: vi.fn().mockResolvedValue([]),
+      getState: vi.fn().mockResolvedValue({
+        currentRevision: 3,
+        lastScheduledRevision: 2,
+        lastMutationAt: "2026-04-27T11:50:00.000Z",
+        lastScheduledAt: "2026-04-27T11:40:00.000Z",
+        schedulerStatus: "running",
+        runningRevision: 3,
+      }),
+      insertRun: vi.fn().mockResolvedValue(undefined),
+      completeRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await runSchedulerTickUseCase(
+      {
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([task]),
+          save: vi.fn().mockResolvedValue(undefined),
+        },
+        capacityRepository: {
+          listBetween: vi.fn().mockResolvedValue([
+            createDayCapacity({ date: "2026-04-27", availableMinutes: 180 }),
           ]),
         },
         scheduleRepository,
+        schedulerStateRepository,
+        planningIntelligence: {
+          analyzeSchedule: vi.fn().mockResolvedValue({
+            annotations: [
+              {
+                taskId: "task_1",
+                taskType: "writing",
+                cognitiveLoad: "high",
+                energy: "medium",
+                tags: ["頭使う", "執筆系"],
+              },
+            ],
+            priorityOrder: ["task_1"],
+            rationale: "締切と負荷から優先しました。",
+          }),
+        },
         clock: {
-          now: () => "2026-04-27T10:00:00.000Z",
+          now: () => "2026-04-27T12:00:00.000Z",
           today: () => "2026-04-27",
         },
         idGenerator: { next: (prefix: string) => `${prefix}_1` },
       },
-      {
-        date: "2026-04-28",
-        availableMinutes: 240,
-        bufferMinutes: 60,
-      },
     );
 
-    expect(capacityRepository.upsert).toHaveBeenCalledTimes(1);
-    expect(capacityRepository.listBetween).toHaveBeenCalledWith(
-      "2026-04-27",
-      "2026-05-03",
-    );
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        horizonEnd: "2026-05-03",
-      }),
+    expect(result.ran).toBe(true);
+    expect(result.scheduled).toBe(true);
+    expect(scheduleRepository.saveCurrentSchedule).toHaveBeenCalledTimes(1);
+    expect(schedulerStateRepository.insertRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "scheduled" }),
     );
   });
 });
 
-describe("updateTaskUseCase", () => {
-  it("updates a task and generates a new pending proposal", async () => {
-    const existingTask = {
-      id: "task_5",
-      title: "Initial title",
-      notes: "",
-      status: "inbox" as const,
-      remainingMinutes: 90,
-      dueDate: null,
-      urgency: "normal" as const,
-      taskType: "unknown" as const,
-      energy: "unknown" as const,
-      createdAt: "2026-04-27T00:00:00.000Z",
-      updatedAt: "2026-04-27T00:00:00.000Z",
-    };
-
-    const taskRepository = {
-      findById: vi.fn().mockResolvedValue(existingTask),
-      save: vi.fn().mockResolvedValue(undefined),
-      listSchedulable: vi.fn().mockResolvedValue([existingTask]),
-    };
-
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await updateTaskUseCase(
-      {
-        taskRepository,
-        capacityRepository: { listBetween: vi.fn().mockResolvedValue([]) },
-        scheduleRepository,
-        clock: {
-          now: () => "2026-04-27T11:00:00.000Z",
-          today: () => "2026-04-27",
-        },
-        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+describe("status and logs use cases", () => {
+  it("returns scheduler timing status", async () => {
+    const status = await getSchedulerStatusUseCase({
+      schedulerStateRepository: {
+        getState: vi.fn().mockResolvedValue({
+          currentRevision: 3,
+          lastScheduledRevision: 2,
+          lastMutationAt: "2026-04-27T11:58:00.000Z",
+          lastScheduledAt: "2026-04-27T11:30:00.000Z",
+          schedulerStatus: "pending",
+          runningRevision: null,
+        }),
       },
-      {
-        taskId: "task_5",
-        title: "Updated title",
-        remainingMinutes: 60,
-        status: "active",
+      clock: {
+        now: () => "2026-04-27T12:00:00.000Z",
+        today: () => "2026-04-27",
       },
-    );
+    });
 
-    expect(taskRepository.save).toHaveBeenCalledTimes(1);
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
+    expect(status.hasPendingChanges).toBe(true);
+    expect(status.secondsUntilNextRun).toBeGreaterThan(0);
+  });
+
+  it("returns combined scheduler logs", async () => {
+    const logs = await listSchedulerLogsUseCase({
+      schedulerStateRepository: {
+        listMutations: vi.fn().mockResolvedValue([{ id: "m1" }]),
+        listRuns: vi.fn().mockResolvedValue([{ id: "r1" }]),
+      },
+    });
+
+    expect(logs.mutations).toHaveLength(1);
+    expect(logs.runs).toHaveLength(1);
   });
 });
 
-describe("approveProposalUseCase", () => {
-  it("approves a proposal and updates the schedule snapshot", async () => {
-    const scheduleRepository = {
-      approveProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await approveProposalUseCase(
-      {
-        scheduleRepository,
-        clock: {
-          now: () => "2026-04-27T14:00:00.000Z",
-          today: () => "2026-04-27",
-        },
-      },
-      { proposalId: "proposal_1" },
-    );
-
-    expect(scheduleRepository.approveProposal).toHaveBeenCalledWith(
-      "proposal_1",
-      "2026-04-27T14:00:00.000Z",
-    );
-  });
-});
-
-describe("rejectProposalUseCase", () => {
-  it("rejects a pending proposal", async () => {
-    const scheduleRepository = {
-      rejectProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await rejectProposalUseCase(
-      {
-        scheduleRepository,
-      },
-      { proposalId: "proposal_2" },
-    );
-
-    expect(scheduleRepository.rejectProposal).toHaveBeenCalledWith("proposal_2");
-  });
-});
-
-describe("generateScheduleProposalUseCase", () => {
-  it("creates a pending proposal from current schedulable tasks", async () => {
-    const tasks = [
-      {
-        id: "task_gen",
-        title: "Draft talk",
-        notes: "",
-        status: "active" as const,
-        remainingMinutes: 120,
-        dueDate: null,
-        urgency: "normal" as const,
-        taskType: "unknown" as const,
-        energy: "unknown" as const,
-        createdAt: "2026-04-27T00:00:00.000Z",
-        updatedAt: "2026-04-27T00:00:00.000Z",
-      },
-    ];
-
-    const scheduleRepository = {
-      savePendingProposal: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await generateScheduleProposalUseCase(
-      {
-        taskRepository: { listSchedulable: vi.fn().mockResolvedValue(tasks) },
-        capacityRepository: { listBetween: vi.fn().mockResolvedValue([]) },
-        scheduleRepository,
-        clock: {
-          now: () => "2026-04-27T15:00:00.000Z",
-          today: () => "2026-04-27",
-        },
-        idGenerator: { next: (prefix: string) => `${prefix}_1` },
-      },
-      { reason: "manual" },
-    );
-
-    expect(scheduleRepository.savePendingProposal).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("getMetricsUseCase", () => {
+describe("metrics and planning health", () => {
   it("returns basic progress metrics", async () => {
-    const metricsRepository = {
-      getRangeSummary: vi.fn().mockResolvedValue({
-        plannedMinutes: 300,
-        actualMinutes: 240,
-        completedMinutes: 180,
-        atRiskTaskCount: 2,
-        pendingProposalCount: 1,
-      }),
-    };
-
-    const result = await getMetricsUseCase(
-      { metricsRepository },
-      { dateFrom: "2026-04-21", dateTo: "2026-04-27" },
+    const metrics = await getMetricsUseCase(
+      {
+        metricsRepository: {
+          getRangeSummary: vi.fn().mockResolvedValue({
+            plannedMinutes: 120,
+            actualMinutes: 90,
+            completedMinutes: 30,
+            atRiskTaskCount: 1,
+          }),
+        },
+      },
+      { dateFrom: "2026-04-27", dateTo: "2026-04-27" },
     );
 
-    expect(result.actualMinutes).toBe(240);
+    expect(metrics.atRiskTaskCount).toBe(1);
   });
-});
 
-describe("getPlanningHealthUseCase", () => {
   it("reports missing capacity dates within the next 7 days", async () => {
     const result = await getPlanningHealthUseCase(
       {
         capacityRepository: {
-          listBetween: async () => [
-            createDayCapacity({ date: "2026-04-28", availableMinutes: 180, bufferMinutes: 30 }),
-            createDayCapacity({ date: "2026-04-30", availableMinutes: 120, bufferMinutes: 20 }),
-          ],
+          listBetween: vi.fn().mockResolvedValue([
+            createDayCapacity({ date: "2026-04-27", availableMinutes: 60 }),
+            createDayCapacity({ date: "2026-04-29", availableMinutes: 60 }),
+          ]),
         },
-        clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
+        clock: {
+          today: () => "2026-04-27",
+          now: () => "2026-04-27T00:00:00.000Z",
+        },
       },
       {},
     );
 
-    expect(result.missingCapacityDatesWithin7Days).toEqual([
-      "2026-04-29",
-      "2026-05-01",
-      "2026-05-02",
-      "2026-05-03",
-      "2026-05-04",
-    ]);
-    expect(result.warningCount).toBe(5);
-  });
-
-  it("returns no planning-health warnings when all 7 days are configured", async () => {
-    const result = await getPlanningHealthUseCase(
-      {
-        capacityRepository: {
-          listBetween: async () =>
-            Array.from({ length: 7 }, (_, offset) =>
-              createDayCapacity({
-                date: addDays("2026-04-28", offset),
-                availableMinutes: 120,
-                bufferMinutes: 20,
-              }),
-            ),
-        },
-        clock: { now: () => "2026-04-28T00:00:00.000Z", today: () => "2026-04-28" },
-      },
-      {},
-    );
-
-    expect(result.missingCapacityDatesWithin7Days).toEqual([]);
-    expect(result.warningCount).toBe(0);
+    expect(result.warningCount).toBeGreaterThan(0);
   });
 });

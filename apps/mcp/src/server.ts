@@ -3,20 +3,16 @@ import {
   createTaskInputSchema,
   logWorkInputSchema,
   setCapacityInputSchema,
+  taskCognitiveLoadSchema,
+  taskEnergySchema,
+  taskTypeSchema,
 } from "@task-platform/contracts";
 import { z } from "zod";
 
-type ScheduleStatus = "pending" | "approved" | "rejected" | "superseded";
 type TaskStatus = "inbox" | "active" | "done" | "archived";
 type TaskUrgency = "today" | "soon" | "normal";
-type TaskType =
-  | "deep"
-  | "shallow"
-  | "admin"
-  | "research"
-  | "writing"
-  | "implementation"
-  | "unknown";
+type TaskType = z.infer<typeof taskTypeSchema>;
+type TaskCognitiveLoad = z.infer<typeof taskCognitiveLoadSchema>;
 type TaskEnergy = "low" | "medium" | "high" | "unknown";
 
 export function createMcpServer(deps: {
@@ -29,21 +25,20 @@ export function createMcpServer(deps: {
     dueDate?: string | null;
     urgency?: TaskUrgency;
     taskType?: TaskType;
+    cognitiveLoad?: TaskCognitiveLoad;
     energy?: TaskEnergy;
+    tags?: string[];
     status?: TaskStatus;
     notes?: string;
   }): Promise<void>;
   logWork(input: z.infer<typeof logWorkInputSchema>): Promise<void>;
   getCapacity(input: { dateFrom: string; dateTo: string }): Promise<unknown[]>;
   setCapacity(input: z.infer<typeof setCapacityInputSchema>): Promise<void>;
-  generateSchedule(input: { reason: string }): Promise<void>;
   getCurrentSchedule(): Promise<unknown>;
-  listProposals(input?: { status?: ScheduleStatus }): Promise<unknown[]>;
-  getProposal(input: { proposalId: string }): Promise<unknown>;
-  approveProposal(input: { proposalId: string }): Promise<void>;
-  rejectProposal(input: { proposalId: string; reason?: string }): Promise<void>;
   getMetrics(input: { dateFrom?: string; dateTo?: string }): Promise<unknown>;
   getPlanningHealth(): Promise<unknown>;
+  getSchedulerStatus(): Promise<unknown>;
+  listSchedulerLogs(): Promise<unknown>;
 }) {
   const server = new McpServer({
     name: "task-platform-mcp",
@@ -87,10 +82,10 @@ export function createMcpServer(deps: {
         remainingMinutes: z.number().int().min(0).optional(),
         dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         urgency: z.enum(["today", "soon", "normal"]).optional(),
-        taskType: z
-          .enum(["deep", "shallow", "admin", "research", "writing", "implementation", "unknown"])
-          .optional(),
-        energy: z.enum(["low", "medium", "high", "unknown"]).optional(),
+        taskType: taskTypeSchema.optional(),
+        cognitiveLoad: taskCognitiveLoadSchema.optional(),
+        energy: taskEnergySchema.optional(),
+        tags: z.array(z.string().min(1)).optional(),
         status: z.enum(["inbox", "active", "done", "archived"]).optional(),
         notes: z.string().optional(),
       },
@@ -140,76 +135,13 @@ export function createMcpServer(deps: {
   );
 
   server.registerTool(
-    "schedule_generate",
-    {
-      description: "Generate a new pending schedule proposal.",
-      inputSchema: { reason: z.string().min(1) },
-    },
-    async (input) => {
-      await deps.generateSchedule(input);
-      return { content: [{ type: "text", text: "schedule generated" }] };
-    },
-  );
-
-  server.registerTool(
     "schedule_get_current",
     {
-      description: "Get the current approved schedule.",
+      description: "Get the current schedule.",
     },
     async () => ({
       content: [{ type: "text", text: JSON.stringify(await deps.getCurrentSchedule()) }],
     }),
-  );
-
-  server.registerTool(
-    "schedule_list_proposals",
-    {
-      description: "List schedule proposals by status.",
-      inputSchema: {
-        status: z.enum(["pending", "approved", "rejected", "superseded"]).optional(),
-      },
-    },
-    async (input) => ({
-      content: [{ type: "text", text: JSON.stringify(await deps.listProposals(input)) }],
-    }),
-  );
-
-  server.registerTool(
-    "schedule_get_proposal",
-    {
-      description: "Get a single schedule proposal.",
-      inputSchema: { proposalId: z.string().min(1) },
-    },
-    async (input) => ({
-      content: [{ type: "text", text: JSON.stringify(await deps.getProposal(input)) }],
-    }),
-  );
-
-  server.registerTool(
-    "schedule_approve",
-    {
-      description: "Approve a pending schedule proposal.",
-      inputSchema: { proposalId: z.string().min(1) },
-    },
-    async (input) => {
-      await deps.approveProposal(input);
-      return { content: [{ type: "text", text: "proposal approved" }] };
-    },
-  );
-
-  server.registerTool(
-    "schedule_reject",
-    {
-      description: "Reject a pending schedule proposal.",
-      inputSchema: {
-        proposalId: z.string().min(1),
-        reason: z.string().optional(),
-      },
-    },
-    async (input) => {
-      await deps.rejectProposal(input);
-      return { content: [{ type: "text", text: "proposal rejected" }] };
-    },
   );
 
   server.registerTool(
@@ -234,6 +166,28 @@ export function createMcpServer(deps: {
     },
     async () => ({
       content: [{ type: "text", text: JSON.stringify(await deps.getPlanningHealth()) }],
+    }),
+  );
+
+  server.registerTool(
+    "scheduler_status_get",
+    {
+      description: "Read scheduler timing and pending/running state.",
+      inputSchema: {},
+    },
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(await deps.getSchedulerStatus()) }],
+    }),
+  );
+
+  server.registerTool(
+    "scheduler_logs_list",
+    {
+      description: "Read recent planning mutations and scheduler runs.",
+      inputSchema: {},
+    },
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(await deps.listSchedulerLogs()) }],
     }),
   );
 

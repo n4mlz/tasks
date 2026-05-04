@@ -1,18 +1,16 @@
-import { buildScheduleProposal, createDayCapacity } from "@task-platform/domain";
+import { createDayCapacity } from "@task-platform/domain";
 import type {
   CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
-  TaskRepository,
+  SchedulerStateRepository,
 } from "../ports";
-import { expandCapacityWindow, selectScheduleHorizon } from "../schedule-window";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function setCapacityUseCase(
   deps: {
-    capacityRepository: Pick<CapacityRepository, "upsert" | "listBetween">;
-    taskRepository: Pick<TaskRepository, "listSchedulable">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    capacityRepository: Pick<CapacityRepository, "upsert">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -24,27 +22,15 @@ export async function setCapacityUseCase(
 ): Promise<void> {
   const capacity = createDayCapacity(input);
   await deps.capacityRepository.upsert(capacity);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const horizon = selectScheduleHorizon({
-    today: deps.clock.today(),
-    tasks,
-  });
-  const capacities = expandCapacityWindow({
-    dateFrom: horizon.start,
-    dateTo: horizon.end,
-    capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
-  });
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "capacity_updated",
-    generatedAt: deps.clock.now(),
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "capacity_updated",
+    entityType: "capacity",
+    entityId: capacity.date,
+    details: {
+      availableMinutes: capacity.availableMinutes,
+    },
   });
 }

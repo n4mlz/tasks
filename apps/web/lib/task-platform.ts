@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
-  approveProposalUseCase,
   createTaskUseCase,
   deleteTaskUseCase,
-  generateScheduleProposalUseCase,
   getMetricsUseCase,
   getPlanningHealthUseCase,
+  getSchedulerStatusUseCase,
+  listSchedulerLogsUseCase,
   logWorkUseCase,
-  rejectProposalUseCase,
+  runSchedulerTickUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
 } from "../../../packages/application/src/index";
@@ -18,10 +18,12 @@ import {
   resolveWorkspaceRoot,
   SqliteCapacityRepository,
   SqliteMetricsRepository,
+  SqliteSchedulerStateRepository,
   SqliteScheduleRepository,
   SqliteTaskRepository,
   SqliteWorkLogRepository,
 } from "../../../packages/infrastructure/src/index";
+import { createPlanningIntelligence } from "./planning-intelligence";
 
 type TaskPlatform = {
   createTask: (input: {
@@ -30,14 +32,18 @@ type TaskPlatform = {
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
     taskType?:
-      | "deep"
-      | "shallow"
-      | "admin"
-      | "research"
-      | "writing"
       | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
       | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
     energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     notes?: string;
   }) => Promise<void>;
   logWork: (input: {
@@ -52,8 +58,6 @@ type TaskPlatform = {
     availableMinutes: number;
     bufferMinutes?: number;
   }) => Promise<void>;
-  approveProposal: (input: { proposalId: string }) => Promise<void>;
-  rejectProposal: (input: { proposalId: string }) => Promise<void>;
   deleteTask: (input: { taskId: string }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
@@ -62,28 +66,30 @@ type TaskPlatform = {
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
     taskType?:
-      | "deep"
-      | "shallow"
-      | "admin"
-      | "research"
-      | "writing"
       | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
       | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
     energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   }) => Promise<void>;
-  generateSchedule: (input: {
-    reason: "task_created" | "task_updated" | "work_logged" | "capacity_updated" | "manual";
-  }) => Promise<void>;
   listTasks: () => Promise<unknown>;
   getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
-  listProposals: (status?: string) => Promise<unknown>;
-  getProposal: (proposalId: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
   getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
   getWorkLogs: (taskIds: string[]) => Promise<unknown>;
+  getSchedulerStatus: () => Promise<unknown>;
+  listSchedulerLogs: () => Promise<unknown>;
+  runSchedulerTick: () => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
@@ -104,6 +110,8 @@ function getTaskPlatform(): TaskPlatform {
   const scheduleRepository = new SqliteScheduleRepository(db);
   const workLogRepository = new SqliteWorkLogRepository(db);
   const metricsRepository = new SqliteMetricsRepository(db);
+  const schedulerStateRepository = new SqliteSchedulerStateRepository(db);
+  const planningIntelligence = createPlanningIntelligence();
 
   const clock = {
     now: () => new Date().toISOString(),
@@ -119,8 +127,7 @@ function getTaskPlatform(): TaskPlatform {
       return createTaskUseCase(
         {
           taskRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -132,8 +139,7 @@ function getTaskPlatform(): TaskPlatform {
         {
           taskRepository,
           workLogRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -144,27 +150,9 @@ function getTaskPlatform(): TaskPlatform {
       return setCapacityUseCase(
         {
           capacityRepository,
-          taskRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
-        },
-        input,
-      );
-    },
-    async approveProposal(input) {
-      return approveProposalUseCase(
-        {
-          scheduleRepository,
-          clock,
-        },
-        input,
-      );
-    },
-    async rejectProposal(input) {
-      return rejectProposalUseCase(
-        {
-          scheduleRepository,
         },
         input,
       );
@@ -173,8 +161,7 @@ function getTaskPlatform(): TaskPlatform {
       return deleteTaskUseCase(
         {
           taskRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -185,20 +172,7 @@ function getTaskPlatform(): TaskPlatform {
       return updateTaskUseCase(
         {
           taskRepository,
-          capacityRepository,
-          scheduleRepository,
-          clock,
-          idGenerator,
-        },
-        input,
-      );
-    },
-    async generateSchedule(input) {
-      return generateScheduleProposalUseCase(
-        {
-          taskRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -210,12 +184,6 @@ function getTaskPlatform(): TaskPlatform {
     },
     async getCapacities(dateFrom: string, dateTo: string) {
       return capacityRepository.listBetween(dateFrom, dateTo);
-    },
-    async listProposals(status?: string) {
-      return scheduleRepository.listByStatus(status);
-    },
-    async getProposal(proposalId: string) {
-      return scheduleRepository.findById(proposalId);
     },
     async getCurrentSchedule() {
       return scheduleRepository.getCurrentSchedule();
@@ -239,6 +207,28 @@ function getTaskPlatform(): TaskPlatform {
     },
     async getWorkLogs(taskIds: string[]) {
       return workLogRepository.listByTaskIds(taskIds);
+    },
+    async getSchedulerStatus() {
+      return getSchedulerStatusUseCase({
+        schedulerStateRepository,
+        clock,
+      });
+    },
+    async listSchedulerLogs() {
+      return listSchedulerLogsUseCase({
+        schedulerStateRepository,
+      });
+    },
+    async runSchedulerTick() {
+      return runSchedulerTickUseCase({
+        taskRepository,
+        capacityRepository,
+        scheduleRepository,
+        schedulerStateRepository,
+        planningIntelligence,
+        clock,
+        idGenerator,
+      });
     },
   };
 

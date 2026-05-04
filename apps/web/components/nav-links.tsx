@@ -8,7 +8,7 @@ const navigationItems = [
   { href: "/", label: "今日" },
   { href: "/inbox", label: "Inbox" },
   { href: "/week", label: "計画" },
-  { href: "/proposals", label: "提案" },
+  { href: "/logs", label: "ログ" },
 ];
 
 export function NavLinks() {

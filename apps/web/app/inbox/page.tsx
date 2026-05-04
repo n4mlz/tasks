@@ -2,6 +2,7 @@ import React from "react";
 import { PencilLine } from "lucide-react";
 import { DeleteTaskDialog } from "../../components/delete-task-dialog";
 import { StatusBadge } from "../../components/status-badge";
+import { TaskIntakeFlow } from "../../components/task-intake-flow";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
@@ -9,6 +10,7 @@ import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { taskPlatform } from "../../lib/task-platform";
 import {
+  cognitiveLoadLabels,
   energyLabels,
   formatHoursFromMinutes,
   statusLabels,
@@ -27,7 +29,9 @@ export default async function InboxPage() {
     status: string;
     dueDate: string | null;
     taskType?: string;
+    cognitiveLoad?: string;
     energy?: string;
+    tags?: string[];
     notes?: string;
   }>;
 
@@ -44,29 +48,7 @@ export default async function InboxPage() {
             <CardTitle className="text-lg tracking-[-0.03em]">追加</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action="/api/tasks" className="grid gap-4" method="post">
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                タイトル
-                <Input name="title" />
-              </label>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  必要な時間 (時間)
-                  <Input min="0.25" name="remainingMinutes" step="0.25" type="number" />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  期限
-                  <Input name="dueDate" type="date" />
-                </label>
-              </div>
-              <label className="grid gap-2 text-sm font-medium text-slate-700">
-                メモ
-                <Textarea name="notes" rows={4} />
-              </label>
-              <Button className="justify-self-start" type="submit">
-                追加
-              </Button>
-            </form>
+            <TaskIntakeFlow />
           </CardContent>
         </Card>
 
@@ -91,9 +73,19 @@ export default async function InboxPage() {
                         {task.taskType && task.taskType !== "unknown" ? (
                           <StatusBadge tone="outline">{taskTypeLabels[task.taskType] ?? task.taskType}</StatusBadge>
                         ) : null}
+                        {task.cognitiveLoad && task.cognitiveLoad !== "unknown" ? (
+                          <StatusBadge tone="outline">
+                            {cognitiveLoadLabels[task.cognitiveLoad] ?? task.cognitiveLoad}
+                          </StatusBadge>
+                        ) : null}
                         {task.energy && task.energy !== "unknown" ? (
                           <StatusBadge tone="outline">{energyLabels[task.energy] ?? task.energy}</StatusBadge>
                         ) : null}
+                        {task.tags?.map((tag) => (
+                          <StatusBadge key={tag} tone="outline">
+                            {tag}
+                          </StatusBadge>
+                        ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -136,6 +128,13 @@ export default async function InboxPage() {
                         </Select>
                       </label>
                     </div>
+                    <input name="taskType" type="hidden" value={task.taskType ?? "unknown"} />
+                    <input
+                      name="cognitiveLoad"
+                      type="hidden"
+                      value={task.cognitiveLoad ?? "unknown"}
+                    />
+                    <input name="energy" type="hidden" value={task.energy ?? "unknown"} />
                     <label className="grid gap-2 text-sm font-medium text-slate-700">
                       メモ
                       <Textarea defaultValue={task.notes ?? ""} name="notes" rows={3} />
