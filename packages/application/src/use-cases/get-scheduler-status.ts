@@ -7,9 +7,11 @@ export async function getSchedulerStatusUseCase(
   },
 ) {
   const state = await deps.schedulerStateRepository.getState();
-  const hasPendingChanges = state.currentRevision > state.lastScheduledRevision;
+  const hasPendingChanges =
+    state.currentRevision > state.lastScheduledRevision ||
+    state.schedulerStatus === "failed";
   const nextRunAt =
-    hasPendingChanges && state.lastMutationAt
+    hasPendingChanges && state.lastMutationAt && state.schedulerStatus !== "failed"
       ? new Date(new Date(state.lastMutationAt).getTime() + 3 * 60_000).toISOString()
       : null;
   const secondsUntilNextRun =

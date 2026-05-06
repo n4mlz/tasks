@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS planning_state (
   last_mutation_at TEXT,
   last_scheduled_at TEXT,
   scheduler_status TEXT NOT NULL,
-  running_revision INTEGER
+  running_revision INTEGER,
+  running_started_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS planning_mutations (

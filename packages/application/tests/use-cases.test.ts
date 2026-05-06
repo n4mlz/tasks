@@ -8,6 +8,7 @@ import {
   getSchedulerStatusUseCase,
   listSchedulerLogsUseCase,
   logWorkUseCase,
+  postponeSchedulerUseCase,
   runSchedulerTickUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
@@ -289,6 +290,77 @@ describe("runSchedulerTickUseCase", () => {
       expect.objectContaining({ status: "scheduled" }),
     );
   });
+
+  it("does not call planning intelligence when total capacity is insufficient", async () => {
+    const schedulerStateRepository = {
+      tryStartRun: vi.fn().mockResolvedValue({
+        started: true,
+        targetRevision: 4,
+        state: {
+          currentRevision: 4,
+          lastScheduledRevision: 3,
+          lastMutationAt: "2026-04-27T11:50:00.000Z",
+          lastScheduledAt: "2026-04-27T11:40:00.000Z",
+          schedulerStatus: "running",
+          runningRevision: 4,
+        },
+      }),
+      listMutations: vi.fn().mockResolvedValue([]),
+      getState: vi.fn().mockResolvedValue({
+        currentRevision: 4,
+        lastScheduledRevision: 3,
+        lastMutationAt: "2026-04-27T11:50:00.000Z",
+        lastScheduledAt: "2026-04-27T11:40:00.000Z",
+        schedulerStatus: "running",
+        runningRevision: 4,
+      }),
+      insertRun: vi.fn().mockResolvedValue(undefined),
+      completeRun: vi.fn().mockResolvedValue(undefined),
+    };
+    const planningIntelligence = {
+      analyzeSchedule: vi.fn(),
+    };
+
+    const result = await runSchedulerTickUseCase(
+      {
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([
+            createTask({
+              id: "task_1",
+              title: "Long task",
+              remainingMinutes: 240,
+              createdAt: "2026-04-27T00:00:00.000Z",
+              dueDate: "2026-04-29",
+            }),
+          ]),
+          save: vi.fn().mockResolvedValue(undefined),
+        },
+        capacityRepository: {
+          listBetween: vi.fn().mockResolvedValue([
+            createDayCapacity({ date: "2026-04-27", availableMinutes: 60 }),
+            createDayCapacity({ date: "2026-04-28", availableMinutes: 60 }),
+          ]),
+        },
+        scheduleRepository: {
+          saveCurrentSchedule: vi.fn().mockResolvedValue(undefined),
+        },
+        schedulerStateRepository,
+        planningIntelligence,
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+    );
+
+    expect(result.scheduled).toBe(false);
+    expect(result.status).toBe("failed");
+    expect(planningIntelligence.analyzeSchedule).not.toHaveBeenCalled();
+    expect(schedulerStateRepository.insertRun).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "insufficient_capacity_window" }),
+    );
+  });
 });
 
 describe("status and logs use cases", () => {
@@ -355,6 +427,9 @@ describe("metrics and planning health", () => {
             createDayCapacity({ date: "2026-04-29", availableMinutes: 60 }),
           ]),
         },
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([]),
+        },
         clock: {
           today: () => "2026-04-27",
           now: () => "2026-04-27T00:00:00.000Z",
@@ -364,5 +439,62 @@ describe("metrics and planning health", () => {
     );
 
     expect(result.warningCount).toBeGreaterThan(0);
+  });
+
+  it("reports insufficient capacity within the active scheduling horizon", async () => {
+    const result = await getPlanningHealthUseCase(
+      {
+        capacityRepository: {
+          listBetween: vi.fn().mockResolvedValue([
+            createDayCapacity({ date: "2026-04-27", availableMinutes: 60 }),
+            createDayCapacity({ date: "2026-04-28", availableMinutes: 60 }),
+          ]),
+        },
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([
+            createTask({
+              id: "task_1",
+              title: "Write report",
+              remainingMinutes: 240,
+              createdAt: "2026-04-27T00:00:00.000Z",
+              dueDate: "2026-04-29",
+            }),
+          ]),
+        },
+        clock: {
+          today: () => "2026-04-27",
+          now: () => "2026-04-27T00:00:00.000Z",
+        },
+      },
+      {},
+    );
+
+    expect(result.hasInsufficientCapacity).toBe(true);
+    expect(result.shortfallMinutes).toBe(120);
+  });
+});
+
+describe("postponeSchedulerUseCase", () => {
+  it("delays the next scheduler run by updating scheduler state", async () => {
+    const schedulerStateRepository = {
+      postponeNextRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await postponeSchedulerUseCase(
+      {
+        schedulerStateRepository,
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+      },
+      { delayMilliseconds: 3 * 60_000 },
+    );
+
+    expect(schedulerStateRepository.postponeNextRun).toHaveBeenCalledWith({
+      now: "2026-04-27T12:00:00.000Z",
+      delayMilliseconds: 3 * 60_000,
+      debounceMilliseconds: 3 * 60_000,
+    });
   });
 });

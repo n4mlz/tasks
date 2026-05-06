@@ -12,7 +12,6 @@ export default defineConfig({
         __dirname,
         "packages/infrastructure/src/index.ts",
       ),
-      "@task-platform/scheduler": path.resolve(__dirname, "packages/scheduler/src/index.ts"),
     },
   },
   test: {

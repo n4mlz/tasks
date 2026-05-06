@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildScheduleProposal,
+  buildSchedulePlan,
   createDayCapacity,
   createTask,
 } from "../src/index";
 
-describe("schedule proposal generation", () => {
+describe("schedule plan generation", () => {
   it("uses a multi-day horizon and schedules before the due date", () => {
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks: [
         createTask({
@@ -26,13 +26,13 @@ describe("schedule proposal generation", () => {
       ],
     });
 
-    expect(proposal.horizonEnd).toBe("2026-04-30");
-    expect(proposal.slices).toHaveLength(3);
-    expect(proposal.summary.unscheduledTaskIds).toEqual([]);
+    expect(plan.horizonEnd).toBe("2026-04-30");
+    expect(plan.slices).toHaveLength(3);
+    expect(plan.summary.unscheduledTaskIds).toEqual([]);
   });
 
   it("marks unscheduled work and capacity pressure", () => {
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks: [
         createTask({
@@ -51,11 +51,11 @@ describe("schedule proposal generation", () => {
       ],
     });
 
-    expect(proposal.riskFlags).toContain(
+    expect(plan.riskFlags).toContain(
       "task_risky:insufficient_capacity_before_due_date",
     );
-    expect(proposal.summary.unscheduledTaskIds).toContain("task_risky");
-    expect(proposal.summary.capacityPressureByDate["2026-04-27"]).toBeGreaterThan(0);
+    expect(plan.summary.unscheduledTaskIds).toContain("task_risky");
+    expect(plan.summary.capacityPressureByDate["2026-04-27"]).toBeGreaterThan(0);
   });
 
   it("places urgency=today work on the current day first", () => {
@@ -74,13 +74,13 @@ describe("schedule proposal generation", () => {
       createDayCapacity({ date: "2026-04-28", availableMinutes: 120 }),
     ];
 
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks,
       capacities,
     });
 
-    expect(proposal.slices).toEqual([
+    expect(plan.slices).toEqual([
       {
         taskId: "task_today",
         date: "2026-04-27",
@@ -106,19 +106,19 @@ describe("schedule proposal generation", () => {
       createDayCapacity({ date: "2026-04-28", availableMinutes: 120 }),
     ];
 
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks,
       capacities,
     });
 
-    expect(proposal.riskFlags).toContain(
+    expect(plan.riskFlags).toContain(
       "task_deadline:insufficient_capacity_before_due_date",
     );
   });
 
   it("does not emit zero-minute slices", () => {
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks: [
         createTask({
@@ -137,6 +137,6 @@ describe("schedule proposal generation", () => {
       ],
     });
 
-    expect(proposal.slices[0]?.plannedMinutes).toBe(25);
+    expect(plan.slices[0]?.plannedMinutes).toBe(25);
   });
 });

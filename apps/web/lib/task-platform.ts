@@ -8,6 +8,7 @@ import {
   getSchedulerStatusUseCase,
   listSchedulerLogsUseCase,
   logWorkUseCase,
+  postponeSchedulerUseCase,
   runSchedulerTickUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
@@ -81,27 +82,47 @@ type TaskPlatform = {
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   }) => Promise<void>;
-  listTasks: () => Promise<unknown>;
+  listTasks: (input?: {
+    status?: "inbox" | "active" | "done" | "archived";
+    dueBefore?: string;
+    scheduledOn?: string;
+  }) => Promise<unknown>;
   getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
-  getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
+  getMetrics: (dateFrom?: string, dateTo?: string) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
-  getWorkLogs: (taskIds: string[]) => Promise<unknown>;
+  getWorkLogs: (input: {
+    taskIds?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+  } | string[]) => Promise<unknown>;
   getSchedulerStatus: () => Promise<unknown>;
+  postponeScheduler: (input: { delayMilliseconds: number }) => Promise<void>;
   listSchedulerLogs: () => Promise<unknown>;
   runSchedulerTick: () => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
 
+function resolveDatabasePath(): string {
+  const workspaceRoot = resolveWorkspaceRoot();
+  const configuredPath = process.env.TASK_PLATFORM_DB;
+
+  if (!configuredPath) {
+    return path.join(workspaceRoot, "task-platform.db");
+  }
+  if (path.isAbsolute(configuredPath)) {
+    return configuredPath;
+  }
+  return path.join(workspaceRoot, configuredPath);
+}
+
 function getTaskPlatform(): TaskPlatform {
   if (taskPlatformInstance) {
     return taskPlatformInstance;
   }
 
-  const dbPath =
-    process.env.TASK_PLATFORM_DB ??
-    path.join(resolveWorkspaceRoot(), "task-platform.db");
+  const dbPath = resolveDatabasePath();
   const db = createDatabase(dbPath);
   migrate(db);
 
@@ -179,8 +200,31 @@ function getTaskPlatform(): TaskPlatform {
         input,
       );
     },
-    async listTasks() {
-      return taskRepository.listAll();
+    async listTasks(input) {
+      let tasks = await taskRepository.listAll();
+
+      if (input?.status) {
+        tasks = tasks.filter((task) => task.status === input.status);
+      }
+
+      if (input?.dueBefore) {
+        const dueBefore = input.dueBefore;
+        tasks = tasks.filter((task) => task.dueDate && task.dueDate <= dueBefore);
+      }
+
+      if (input?.scheduledOn) {
+        const schedule = (await scheduleRepository.getCurrentSchedule()) as {
+          slices: Array<{ task_id?: string; date?: string }>;
+        };
+        const scheduledTaskIds = new Set(
+          schedule.slices
+            .filter((slice) => slice.date === input.scheduledOn && slice.task_id)
+            .map((slice) => String(slice.task_id)),
+        );
+        tasks = tasks.filter((task) => scheduledTaskIds.has(task.id));
+      }
+
+      return tasks;
     },
     async getCapacities(dateFrom: string, dateTo: string) {
       return capacityRepository.listBetween(dateFrom, dateTo);
@@ -188,31 +232,46 @@ function getTaskPlatform(): TaskPlatform {
     async getCurrentSchedule() {
       return scheduleRepository.getCurrentSchedule();
     },
-    async getMetrics(dateFrom: string, dateTo: string) {
+    async getMetrics(dateFrom?: string, dateTo?: string) {
+      const resolvedDateFrom = dateFrom ?? clock.today();
+      const resolvedDateTo = dateTo ?? resolvedDateFrom;
       return getMetricsUseCase(
         {
           metricsRepository,
         },
-        { dateFrom, dateTo },
+        { dateFrom: resolvedDateFrom, dateTo: resolvedDateTo },
       );
     },
     async getPlanningHealth() {
       return getPlanningHealthUseCase(
         {
           capacityRepository,
+          taskRepository,
           clock,
         },
         {},
       );
     },
-    async getWorkLogs(taskIds: string[]) {
-      return workLogRepository.listByTaskIds(taskIds);
+    async getWorkLogs(input: { taskIds?: string[]; dateFrom?: string; dateTo?: string } | string[]) {
+      if (Array.isArray(input)) {
+        return workLogRepository.listByTaskIds(input);
+      }
+      return workLogRepository.list(input);
     },
     async getSchedulerStatus() {
       return getSchedulerStatusUseCase({
         schedulerStateRepository,
         clock,
       });
+    },
+    async postponeScheduler(input) {
+      return postponeSchedulerUseCase(
+        {
+          schedulerStateRepository,
+          clock,
+        },
+        input,
+      );
     },
     async listSchedulerLogs() {
       return listSchedulerLogsUseCase({

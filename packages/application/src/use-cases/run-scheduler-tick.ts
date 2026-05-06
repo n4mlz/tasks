@@ -68,6 +68,55 @@ export async function runSchedulerTickUseCase(
       dateTo: horizon.end,
       capacities: await deps.capacityRepository.listBetween(horizon.start, horizon.end),
     });
+    const availableMinutesWithinHorizon = capacities.reduce(
+      (sum, capacity) => sum + capacity.availableMinutes - capacity.bufferMinutes,
+      0,
+    );
+    const requiredMinutesWithinHorizon = tasks.reduce(
+      (sum, task) => sum + task.remainingMinutes,
+      0,
+    );
+    const shortfallMinutes = Math.max(
+      requiredMinutesWithinHorizon - availableMinutesWithinHorizon,
+      0,
+    );
+
+    if (shortfallMinutes > 0) {
+      await deps.schedulerStateRepository.insertRun({
+        id: runId,
+        targetRevision: claim.targetRevision,
+        status: "failed",
+        reason: "insufficient_capacity_window",
+        startedAt: now,
+        finishedAt: deps.clock.now(),
+        rationale: "",
+        validation: {
+          isValid: false,
+          errors: [`insufficient_capacity_window:${shortfallMinutes}`],
+          shortfallMinutes,
+          availableMinutesWithinHorizon,
+          requiredMinutesWithinHorizon,
+        },
+        errorMessage: "insufficient capacity within scheduling horizon",
+      });
+      await deps.schedulerStateRepository.completeRun({
+        targetRevision: claim.targetRevision,
+        finishedAt: deps.clock.now(),
+        status: "failed",
+        scheduled: false,
+        processed: true,
+      });
+
+      return {
+        ran: true,
+        scheduled: false,
+        status: "failed",
+        validation: {
+          isValid: false,
+          errors: [`insufficient_capacity_window:${shortfallMinutes}`],
+        },
+      };
+    }
 
     const analysis = await deps.planningIntelligence.analyzeSchedule({
       today: deps.clock.today(),
@@ -127,6 +176,7 @@ export async function runSchedulerTickUseCase(
         finishedAt: deps.clock.now(),
         status: "failed",
         scheduled: false,
+        processed: true,
       });
 
       return {
@@ -194,6 +244,7 @@ export async function runSchedulerTickUseCase(
       finishedAt: deps.clock.now(),
       status: "idle",
       scheduled: true,
+      processed: true,
     });
 
     return {
@@ -219,6 +270,7 @@ export async function runSchedulerTickUseCase(
       finishedAt: deps.clock.now(),
       status: "failed",
       scheduled: false,
+      processed: true,
     });
     throw error;
   }

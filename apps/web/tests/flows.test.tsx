@@ -41,21 +41,37 @@ describe("Inbox flow", () => {
     vi.setSystemTime(new Date("2026-04-28T09:00:00.000Z"));
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          status: {
-            currentRevision: 1,
-            lastScheduledRevision: 1,
-            lastMutationAt: null,
-            lastScheduledAt: "2026-04-28T08:30:00.000Z",
-            schedulerStatus: "idle",
-            runningRevision: null,
-            hasPendingChanges: false,
-            nextRunAt: null,
-            secondsUntilNextRun: null,
-          },
-        }),
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/planning-health")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              missingCapacityDatesWithin7Days: ["2026-04-29", "2026-05-01"],
+              warningCount: 2,
+              hasInsufficientCapacity: false,
+              shortfallMinutes: 0,
+              horizonEnd: "2026-05-04",
+            }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            status: {
+              currentRevision: 1,
+              lastScheduledRevision: 1,
+              lastMutationAt: null,
+              lastScheduledAt: "2026-04-28T08:30:00.000Z",
+              schedulerStatus: "idle",
+              runningRevision: null,
+              hasPendingChanges: false,
+              nextRunAt: null,
+              secondsUntilNextRun: null,
+            },
+          }),
+        });
       }),
     );
 
@@ -67,6 +83,9 @@ describe("Inbox flow", () => {
     taskPlatformMock.getPlanningHealth.mockResolvedValue({
       missingCapacityDatesWithin7Days: ["2026-04-29", "2026-05-01"],
       warningCount: 2,
+      hasInsufficientCapacity: false,
+      shortfallMinutes: 0,
+      horizonEnd: "2026-05-04",
     });
     taskPlatformMock.getCapacities.mockResolvedValue([]);
     taskPlatformMock.getMetrics.mockResolvedValue({

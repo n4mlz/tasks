@@ -29,6 +29,7 @@ vi.mock("next/navigation", () => ({
 import HomePage from "../app/page";
 import { AppShell } from "../components/app-shell";
 import InboxPage from "../app/inbox/page";
+import { SchedulerStatus } from "../components/scheduler-status";
 import WeekPage from "../app/week/page";
 
 describe("Web UI", () => {
@@ -43,21 +44,37 @@ describe("Web UI", () => {
     vi.setSystemTime(new Date("2026-04-28T09:00:00.000Z"));
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          status: {
-            currentRevision: 1,
-            lastScheduledRevision: 1,
-            lastMutationAt: null,
-            lastScheduledAt: "2026-04-28T08:30:00.000Z",
-            schedulerStatus: "idle",
-            runningRevision: null,
-            hasPendingChanges: false,
-            nextRunAt: null,
-            secondsUntilNextRun: null,
-          },
-        }),
+      vi.fn().mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/planning-health")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              missingCapacityDatesWithin7Days: ["2026-04-29", "2026-05-01"],
+              warningCount: 2,
+              hasInsufficientCapacity: false,
+              shortfallMinutes: 0,
+              horizonEnd: "2026-05-04",
+            }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            status: {
+              currentRevision: 1,
+              lastScheduledRevision: 1,
+              lastMutationAt: null,
+              lastScheduledAt: "2026-04-28T08:30:00.000Z",
+              schedulerStatus: "idle",
+              runningRevision: null,
+              hasPendingChanges: false,
+              nextRunAt: null,
+              secondsUntilNextRun: null,
+            },
+          }),
+        });
       }),
     );
 
@@ -95,6 +112,9 @@ describe("Web UI", () => {
     taskPlatformMock.getPlanningHealth.mockResolvedValue({
       missingCapacityDatesWithin7Days: ["2026-04-29", "2026-05-01"],
       warningCount: 2,
+      hasInsufficientCapacity: false,
+      shortfallMinutes: 0,
+      horizonEnd: "2026-05-04",
     });
     taskPlatformMock.getCapacities.mockResolvedValue([]);
     taskPlatformMock.getMetrics.mockResolvedValue({
@@ -131,6 +151,32 @@ describe("Web UI", () => {
     expect(screen.getByRole("link", { name: "今日" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("shows a scheduler delay button while pending", async () => {
+    vi.useRealTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: {
+            currentRevision: 2,
+            lastScheduledRevision: 1,
+            lastMutationAt: "2026-04-28T08:59:00.000Z",
+            lastScheduledAt: "2026-04-28T08:30:00.000Z",
+            schedulerStatus: "pending",
+            runningRevision: null,
+            hasPendingChanges: true,
+            nextRunAt: "2026-04-28T09:02:00.000Z",
+            secondsUntilNextRun: 120,
+          },
+        }),
+      }),
+    );
+
+    render(<SchedulerStatus />);
+    expect(await screen.findByRole("button", { name: "3分延長" })).toBeInTheDocument();
+  });
+
   it("shows only today's slices on the Today page", async () => {
     render(await HomePage());
 
@@ -149,7 +195,7 @@ describe("Web UI", () => {
   it("renders a planning-health warning on the Today page", async () => {
     render(await HomePage());
 
-    expect(screen.getByText(/余力時間が未設定の日があります/)).toBeInTheDocument();
+    expect(screen.getByText(/計画の見直しが必要です/)).toBeInTheDocument();
     expect(screen.getByText(/2026-04-29/)).toBeInTheDocument();
   });
 
@@ -195,7 +241,7 @@ describe("Web UI", () => {
 
     render(await WeekPageWithProps({ searchParams: Promise.resolve({ referenceDate: "2026-05-02" }) }));
 
-    expect(screen.getByText(/余力時間が未設定の日があります/)).toBeInTheDocument();
+    expect(screen.getByText(/計画の見直しが必要です/)).toBeInTheDocument();
     expect(screen.getAllByText(/2026-05-01/).length).toBeGreaterThan(0);
   });
 

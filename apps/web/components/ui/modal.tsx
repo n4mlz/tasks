@@ -24,7 +24,9 @@ export function Modal({
   onOpenChange,
 }: ModalProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
   const open = controlledOpen ?? uncontrolledOpen;
+
   const setOpen = React.useCallback(
     (next: boolean) => {
       if (controlledOpen === undefined) {
@@ -34,6 +36,31 @@ export function Modal({
     },
     [controlledOpen, onOpenChange],
   );
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [open, setOpen]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    contentRef.current?.focus();
+  }, [open]);
+
   const triggerNode =
     trigger === undefined
       ? null
@@ -51,17 +78,33 @@ export function Modal({
     <>
       {triggerNode}
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4">
+        <div
+          aria-hidden={false}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4"
+          onClick={() => setOpen(false)}
+        >
           <div
+            aria-describedby={description ? "modal-description" : undefined}
+            aria-labelledby="modal-title"
             className={cn(
               "w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.22)]",
               className,
             )}
+            onClick={(event) => event.stopPropagation()}
+            ref={contentRef}
+            role="dialog"
+            tabIndex={-1}
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div className="grid gap-1">
-                <h2 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">{title}</h2>
-                {description ? <p className="text-sm text-slate-600">{description}</p> : null}
+                <h2 id="modal-title" className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                  {title}
+                </h2>
+                {description ? (
+                  <p id="modal-description" className="text-sm text-slate-600">
+                    {description}
+                  </p>
+                ) : null}
               </div>
               <button
                 aria-label="閉じる"

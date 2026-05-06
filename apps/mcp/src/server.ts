@@ -31,13 +31,20 @@ export function createMcpServer(deps: {
     status?: TaskStatus;
     notes?: string;
   }): Promise<void>;
+  deleteTask(input: { taskId: string }): Promise<void>;
   logWork(input: z.infer<typeof logWorkInputSchema>): Promise<void>;
+  listWorkLogs(input?: {
+    taskIds?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<unknown[]>;
   getCapacity(input: { dateFrom: string; dateTo: string }): Promise<unknown[]>;
   setCapacity(input: z.infer<typeof setCapacityInputSchema>): Promise<void>;
   getCurrentSchedule(): Promise<unknown>;
   getMetrics(input: { dateFrom?: string; dateTo?: string }): Promise<unknown>;
   getPlanningHealth(): Promise<unknown>;
   getSchedulerStatus(): Promise<unknown>;
+  postponeScheduler(input: { delayMilliseconds: number }): Promise<void>;
   listSchedulerLogs(): Promise<unknown>;
 }) {
   const server = new McpServer({
@@ -97,6 +104,20 @@ export function createMcpServer(deps: {
   );
 
   server.registerTool(
+    "task_delete",
+    {
+      description: "Delete a task.",
+      inputSchema: {
+        taskId: z.string().min(1),
+      },
+    },
+    async (input) => {
+      await deps.deleteTask(input);
+      return { content: [{ type: "text", text: "task deleted" }] };
+    },
+  );
+
+  server.registerTool(
     "task_log_work",
     {
       description: "Log spent time and the remaining estimate for a task.",
@@ -106,6 +127,21 @@ export function createMcpServer(deps: {
       await deps.logWork(logWorkInputSchema.parse(input));
       return { content: [{ type: "text", text: "work logged" }] };
     },
+  );
+
+  server.registerTool(
+    "work_logs_list",
+    {
+      description: "List work logs by optional task ids and date range.",
+      inputSchema: {
+        taskIds: z.array(z.string().min(1)).optional(),
+        dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      },
+    },
+    async (input) => ({
+      content: [{ type: "text", text: JSON.stringify(await deps.listWorkLogs(input)) }],
+    }),
   );
 
   server.registerTool(
@@ -178,6 +214,22 @@ export function createMcpServer(deps: {
     async () => ({
       content: [{ type: "text", text: JSON.stringify(await deps.getSchedulerStatus()) }],
     }),
+  );
+
+  server.registerTool(
+    "scheduler_delay",
+    {
+      description: "Delay the next automatic scheduling run.",
+      inputSchema: {
+        delayMinutes: z.number().int().positive().default(3),
+      },
+    },
+    async (input) => {
+      await deps.postponeScheduler({
+        delayMilliseconds: input.delayMinutes * 60_000,
+      });
+      return { content: [{ type: "text", text: "scheduler delayed" }] };
+    },
   );
 
   server.registerTool(

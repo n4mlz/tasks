@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { ClipboardCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Modal } from "./ui/modal";
@@ -19,9 +20,12 @@ export function WorkLogDialog({
   date,
   defaultRemainingHours,
 }: WorkLogDialogProps) {
+  const router = useRouter();
   const [spentHours, setSpentHours] = React.useState("");
   const [remainingHours, setRemainingHours] = React.useState(defaultRemainingHours.toString());
   const [markDone, setMarkDone] = React.useState(false);
+  const [note, setNote] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     if (markDone) {
@@ -44,14 +48,37 @@ export function WorkLogDialog({
       title={title}
       trigger={<Button type="button">作業記録</Button>}
     >
-      <form action={`/api/tasks/${taskId}/log-work`} className="grid gap-4" method="post">
-        <input name="date" type="hidden" value={date} />
-        <input name="markDone" type="hidden" value={markDone ? "true" : "false"} />
+      <form
+        className="grid gap-4"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setSaving(true);
+          try {
+            const response = await fetch(`/api/tasks/${taskId}/log-work`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                date,
+                spentMinutes: spentHours,
+                remainingMinutesAfter: remainingHours,
+                markDone,
+                note,
+              }),
+            });
+            if (!response.ok) {
+              throw new Error("failed to save work log");
+            }
+            window.dispatchEvent(new Event("task-platform:planning-changed"));
+            router.refresh();
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
         <label className="grid gap-2 text-sm font-medium text-slate-700">
           進めた時間 (時間)
           <Input
             min="0.25"
-            name="spentMinutes"
             onChange={(event) => setSpentHours(event.target.value)}
             step="0.25"
             type="number"
@@ -62,7 +89,6 @@ export function WorkLogDialog({
           残り時間 (時間)
           <Input
             min="0"
-            name="remainingMinutesAfter"
             onChange={(event) => {
               setMarkDone(event.target.value === "0");
               setRemainingHours(event.target.value);
@@ -83,10 +109,10 @@ export function WorkLogDialog({
         </label>
         <label className="grid gap-2 text-sm font-medium text-slate-700">
           メモ
-          <Input name="note" />
+          <Input onChange={(event) => setNote(event.target.value)} value={note} />
         </label>
         <div className="flex justify-end">
-          <Button type="submit">
+          <Button disabled={saving} type="submit">
             <ClipboardCheck className="h-4 w-4" />
             保存
           </Button>

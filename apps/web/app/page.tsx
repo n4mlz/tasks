@@ -28,6 +28,9 @@ export default async function HomePage() {
   const planningHealth = (await taskPlatform.getPlanningHealth()) as {
     missingCapacityDatesWithin7Days: string[];
     warningCount: number;
+    hasInsufficientCapacity?: boolean;
+    shortfallMinutes?: number;
+    horizonEnd?: string;
   };
   const tasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
@@ -61,7 +64,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <PlanningAlert compact dates={planningHealth.missingCapacityDatesWithin7Days} />
+      <PlanningAlert compact initialHealth={planningHealth} />
 
       {todaysSlices.length === 0 ? (
         <Card className="border-dashed border-slate-300/90 bg-white/90">

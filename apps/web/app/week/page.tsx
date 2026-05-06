@@ -97,6 +97,9 @@ export default async function WeekPage(props: {
   const planningHealth = (await taskPlatform.getPlanningHealth()) as {
     missingCapacityDatesWithin7Days: string[];
     warningCount: number;
+    hasInsufficientCapacity?: boolean;
+    shortfallMinutes?: number;
+    horizonEnd?: string;
   };
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeScheduleId: string | null;
@@ -206,7 +209,7 @@ export default async function WeekPage(props: {
         </div>
       </div>
 
-      <PlanningAlert dates={planningHealth.missingCapacityDatesWithin7Days} />
+      <PlanningAlert initialHealth={planningHealth} />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="border-white/80 bg-white/94">

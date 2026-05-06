@@ -19,8 +19,6 @@ export interface DomainSchedulePlan {
     capacityPressureByDate: Record<string, number>;
   };
 }
-
-export type DomainScheduleProposal = DomainSchedulePlan;
 export interface ScheduleValidationResult {
   isValid: boolean;
   errors: string[];
@@ -179,8 +177,6 @@ export function buildSchedulePlan(input: {
     },
   };
 }
-
-export const buildScheduleProposal = buildSchedulePlan;
 
 export function validateSchedulePlan(input: {
   plan: DomainSchedulePlan;

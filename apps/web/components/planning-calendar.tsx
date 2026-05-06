@@ -37,6 +37,7 @@ export function PlanningCalendar({ initialPayload, today }: PlanningCalendarProp
   const [payload, setPayload] = React.useState(initialPayload);
   const [jumpDate, setJumpDate] = React.useState(initialPayload.referenceDate);
   const [loading, setLoading] = React.useState(false);
+  const [openDate, setOpenDate] = React.useState<string | null>(null);
 
   const loadMonth = React.useCallback(async (referenceDate: string) => {
     setLoading(true);
@@ -118,6 +119,8 @@ export function PlanningCalendar({ initialPayload, today }: PlanningCalendarProp
             <Modal
               key={date}
               description={plannedMinutes > 0 ? `配分 ${formatHours(plannedMinutes)} 時間` : "配分はありません"}
+              onOpenChange={(open) => setOpenDate(open ? date : openDate === date ? null : openDate)}
+              open={openDate === date}
               title={`${date} の余力時間`}
               trigger={
                 <button
@@ -153,16 +156,9 @@ export function PlanningCalendar({ initialPayload, today }: PlanningCalendarProp
               <CalendarEditForm
                 availableHours={availableMinutes === 0 ? "" : formatHours(availableMinutes)}
                 date={date}
-                onSaved={(hours) => {
-                  setPayload((current) => {
-                    const nextCapacities = current.capacities.filter((capacity) => capacity.date !== date);
-                    nextCapacities.push({
-                      date,
-                      availableMinutes: Math.round(Number(hours) * 60),
-                    });
-                    nextCapacities.sort((left, right) => left.date.localeCompare(right.date));
-                    return { ...current, capacities: nextCapacities };
-                  });
+                onSaved={async () => {
+                  setOpenDate(null);
+                  await loadMonth(payload.referenceDate);
                 }}
                 tasks={slices.map(
                   (slice) => `${slice.taskTitle} ${formatHours(slice.plannedMinutes)} 時間`,
@@ -185,7 +181,7 @@ function CalendarEditForm({
   date: string;
   availableHours: string;
   tasks: string[];
-  onSaved: (hours: string) => void;
+  onSaved: () => Promise<void> | void;
 }) {
   const [hours, setHours] = React.useState(availableHours);
   const [saving, setSaving] = React.useState(false);
@@ -210,7 +206,8 @@ function CalendarEditForm({
           if (!response.ok) {
             throw new Error("failed to save capacity");
           }
-          onSaved(hours || "0");
+          await onSaved();
+          window.dispatchEvent(new Event("task-platform:planning-changed"));
         } finally {
           setSaving(false);
         }

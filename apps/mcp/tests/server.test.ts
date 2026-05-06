@@ -7,7 +7,9 @@ describe("createMcpServer", () => {
       listTasks: async () => [],
       createTask: async () => undefined,
       updateTask: async () => undefined,
+      deleteTask: async () => undefined,
       logWork: async () => undefined,
+      listWorkLogs: async () => [],
       getCapacity: async () => [],
       setCapacity: async () => undefined,
       getCurrentSchedule: async () => ({ slices: [], riskFlags: [] }),
@@ -24,6 +26,7 @@ describe("createMcpServer", () => {
       getSchedulerStatus: async () => ({
         schedulerStatus: "idle",
       }),
+      postponeScheduler: async () => undefined,
       listSchedulerLogs: async () => ({
         mutations: [],
         runs: [],
@@ -35,13 +38,16 @@ describe("createMcpServer", () => {
     expect(toolNames).toContain("task_create");
     expect(toolNames).toContain("tasks_list");
     expect(toolNames).toContain("task_update");
+    expect(toolNames).toContain("task_delete");
     expect(toolNames).toContain("task_log_work");
+    expect(toolNames).toContain("work_logs_list");
     expect(toolNames).toContain("capacity_get");
     expect(toolNames).toContain("capacity_set");
     expect(toolNames).toContain("schedule_get_current");
     expect(toolNames).toContain("metrics_get");
     expect(toolNames).toContain("planning_health_get");
     expect(toolNames).toContain("scheduler_status_get");
+    expect(toolNames).toContain("scheduler_delay");
     expect(toolNames).toContain("scheduler_logs_list");
   });
 
@@ -50,7 +56,9 @@ describe("createMcpServer", () => {
       listTasks: async () => [],
       createTask: async () => undefined,
       updateTask: async () => undefined,
+      deleteTask: async () => undefined,
       logWork: async () => undefined,
+      listWorkLogs: async () => [],
       getCapacity: async () => [],
       setCapacity: async () => undefined,
       getCurrentSchedule: async () => ({
@@ -75,6 +83,7 @@ describe("createMcpServer", () => {
       getSchedulerStatus: async () => ({
         schedulerStatus: "pending",
       }),
+      postponeScheduler: async () => undefined,
       listSchedulerLogs: async () => ({
         mutations: [],
         runs: [],
@@ -135,7 +144,9 @@ describe("createMcpServer", () => {
       listTasks: async () => [],
       createTask: async () => undefined,
       updateTask: async () => undefined,
+      deleteTask: async () => undefined,
       logWork: async () => undefined,
+      listWorkLogs: async () => [],
       getCapacity: async () => [],
       setCapacity: async () => undefined,
       getCurrentSchedule: async () => ({ slices: [], riskFlags: [] }),
@@ -152,6 +163,7 @@ describe("createMcpServer", () => {
       getSchedulerStatus: async () => ({
         schedulerStatus: "idle",
       }),
+      postponeScheduler: async () => undefined,
       listSchedulerLogs: async () => ({
         mutations: [],
         runs: [],

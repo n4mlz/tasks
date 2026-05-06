@@ -10,6 +10,7 @@ type PlanningStateRow = {
   last_scheduled_at: string | null;
   scheduler_status: "idle" | "pending" | "running" | "failed";
   running_revision: number | null;
+  running_started_at: string | null;
 };
 
 export class SqliteSchedulerStateRepository {
@@ -26,8 +27,9 @@ export class SqliteSchedulerStateRepository {
             last_mutation_at,
             last_scheduled_at,
             scheduler_status,
-            running_revision
-          ) VALUES (?, 0, 0, NULL, NULL, 'idle', NULL)
+            running_revision,
+            running_started_at
+          ) VALUES (?, 0, 0, NULL, NULL, 'idle', NULL, NULL)
         `,
       )
       .run(SINGLETON_ID);
@@ -40,6 +42,7 @@ export class SqliteSchedulerStateRepository {
     lastScheduledAt: string | null;
     schedulerStatus: "idle" | "pending" | "running" | "failed";
     runningRevision: number | null;
+    runningStartedAt: string | null;
   }> {
     this.ensureState();
     const row = this.db
@@ -53,6 +56,7 @@ export class SqliteSchedulerStateRepository {
       lastScheduledAt: row.last_scheduled_at,
       schedulerStatus: row.scheduler_status,
       runningRevision: row.running_revision,
+      runningStartedAt: row.running_started_at,
     };
   }
 
@@ -134,7 +138,32 @@ export class SqliteSchedulerStateRepository {
         lastScheduledAt: row.last_scheduled_at,
         schedulerStatus: row.scheduler_status,
         runningRevision: row.running_revision,
+        runningStartedAt: row.running_started_at,
       };
+
+      if (state.schedulerStatus === "running") {
+        const startedAt = state.runningStartedAt ? new Date(state.runningStartedAt).getTime() : null;
+        const isStale =
+          startedAt === null ||
+          Number.isNaN(startedAt) ||
+          new Date(input.now).getTime() - startedAt > 5 * 60_000;
+
+        if (isStale) {
+          this.db
+            .prepare(
+              `
+                UPDATE planning_state
+                SET scheduler_status = 'pending', running_revision = NULL, running_started_at = NULL
+                WHERE singleton_id = ?
+              `,
+            )
+            .run(SINGLETON_ID);
+
+          state.schedulerStatus = "pending";
+          state.runningRevision = null;
+          state.runningStartedAt = null;
+        }
+      }
 
       if (state.schedulerStatus === "running") {
         return { started: false as const, state };
@@ -156,11 +185,11 @@ export class SqliteSchedulerStateRepository {
         .prepare(
           `
             UPDATE planning_state
-            SET scheduler_status = 'running', running_revision = ?
+            SET scheduler_status = 'running', running_revision = ?, running_started_at = ?
             WHERE singleton_id = ?
           `,
         )
-        .run(state.currentRevision, SINGLETON_ID);
+        .run(state.currentRevision, input.now, SINGLETON_ID);
 
       return {
         started: true as const,
@@ -169,6 +198,7 @@ export class SqliteSchedulerStateRepository {
           ...state,
           schedulerStatus: "running" as const,
           runningRevision: state.currentRevision,
+          runningStartedAt: input.now,
         },
       };
     });
@@ -181,6 +211,7 @@ export class SqliteSchedulerStateRepository {
     finishedAt: string;
     status: "idle" | "pending" | "failed";
     scheduled: boolean;
+    processed?: boolean;
   }): Promise<void> {
     this.ensureState();
     const row = this.db
@@ -196,18 +227,56 @@ export class SqliteSchedulerStateRepository {
             last_scheduled_revision = CASE WHEN ? THEN ? ELSE last_scheduled_revision END,
             last_scheduled_at = CASE WHEN ? THEN ? ELSE last_scheduled_at END,
             scheduler_status = ?,
-            running_revision = NULL
+            running_revision = NULL,
+            running_started_at = NULL
           WHERE singleton_id = ?
         `,
       )
       .run(
-        input.scheduled && !revisionAdvanced ? 1 : 0,
+        (input.scheduled || input.processed) && !revisionAdvanced ? 1 : 0,
         input.targetRevision,
         input.scheduled && !revisionAdvanced ? 1 : 0,
         input.finishedAt,
         revisionAdvanced ? "pending" : input.status,
         SINGLETON_ID,
       );
+  }
+
+  async postponeNextRun(input: {
+    now: string;
+    delayMilliseconds: number;
+    debounceMilliseconds: number;
+  }): Promise<void> {
+    this.ensureState();
+    const row = this.db
+      .prepare(`SELECT last_mutation_at, current_revision, last_scheduled_revision FROM planning_state WHERE singleton_id = ?`)
+      .get(SINGLETON_ID) as {
+        last_mutation_at: string | null;
+        current_revision: number;
+        last_scheduled_revision: number;
+      };
+
+    if (Number(row.current_revision) <= Number(row.last_scheduled_revision)) {
+      return;
+    }
+
+    const currentNextRunAt = row.last_mutation_at
+      ? new Date(row.last_mutation_at).getTime() + input.debounceMilliseconds
+      : new Date(input.now).getTime() + input.debounceMilliseconds;
+    const desiredNextRunAt = Math.max(currentNextRunAt, new Date(input.now).getTime()) + input.delayMilliseconds;
+    const nextMutationAt = new Date(
+      desiredNextRunAt - input.debounceMilliseconds,
+    ).toISOString();
+
+    this.db
+      .prepare(
+        `
+          UPDATE planning_state
+          SET last_mutation_at = ?, scheduler_status = 'pending'
+          WHERE singleton_id = ?
+        `,
+      )
+      .run(nextMutationAt, SINGLETON_ID);
   }
 
   async listMutations(limit = 50): Promise<

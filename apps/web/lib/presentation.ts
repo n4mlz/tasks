@@ -58,6 +58,7 @@ export const schedulerRunReasonLabels: Record<string, string> = {
   polling_tick: "定期実行で再配分しました",
   newer_mutation_arrived: "実行中に新しい変更が入りました",
   validation_failed: "再配分結果が検証に失敗しました",
+  insufficient_capacity_window: "余力時間が足りないため再配分できませんでした",
   exception: "再配分中に例外が発生しました",
 };
 

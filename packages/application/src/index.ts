@@ -10,4 +10,5 @@ export { getMetricsUseCase } from "./use-cases/get-metrics";
 export { getPlanningHealthUseCase } from "./use-cases/get-planning-health";
 export { getSchedulerStatusUseCase } from "./use-cases/get-scheduler-status";
 export { listSchedulerLogsUseCase } from "./use-cases/list-scheduler-logs";
+export { postponeSchedulerUseCase } from "./use-cases/postpone-scheduler";
 export { runSchedulerTickUseCase } from "./use-cases/run-scheduler-tick";

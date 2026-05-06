@@ -46,6 +46,7 @@ export function TaskIntakeFlow() {
             notes: "",
           });
           setMessage("保存しました。変更が落ち着いてから自動で再配分します。");
+          window.dispatchEvent(new Event("task-platform:planning-changed"));
           router.refresh();
         } catch (submitError) {
           setError(submitError instanceof Error ? submitError.message : "create_failed");

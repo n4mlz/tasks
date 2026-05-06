@@ -34,6 +34,7 @@ export interface SchedulerStateRepository {
     lastScheduledAt: string | null;
     schedulerStatus: "idle" | "pending" | "running" | "failed";
     runningRevision: number | null;
+    runningStartedAt: string | null;
   }>;
   recordMutation(input: {
     mutationId: string;
@@ -59,6 +60,12 @@ export interface SchedulerStateRepository {
     finishedAt: string;
     status: "idle" | "pending" | "failed";
     scheduled: boolean;
+    processed?: boolean;
+  }): Promise<void>;
+  postponeNextRun(input: {
+    now: string;
+    delayMilliseconds: number;
+    debounceMilliseconds: number;
   }): Promise<void>;
   listMutations(limit?: number): Promise<
     Array<{
@@ -107,6 +114,20 @@ export interface WorkLogRepository {
     note: string;
   }): Promise<void>;
   listByTaskIds(taskIds: string[]): Promise<
+    Array<{
+      id: string;
+      taskId: string;
+      date: string;
+      spentMinutes: number;
+      remainingMinutesAfter: number;
+      note: string;
+    }>
+  >;
+  list(input?: {
+    taskIds?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<
     Array<{
       id: string;
       taskId: string;

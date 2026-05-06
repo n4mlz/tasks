@@ -211,8 +211,15 @@ function resolveModel() {
   };
 }
 
+function resolveTimeoutMs(): number {
+  loadWorkspaceEnv();
+  const raw = Number(process.env.TASK_PLATFORM_LLM_TIMEOUT_MS ?? "20000");
+  return Number.isFinite(raw) && raw > 0 ? raw : 20_000;
+}
+
 export function createPlanningIntelligence(): PlanningIntelligence {
   const { model, fallbackReason } = resolveModel();
+  const timeoutMs = resolveTimeoutMs();
   if (!model) {
     return heuristicPlanner(
       fallbackReason ?? "ローカルの互換 LLM が未設定のため、簡易推定でスケジューリングしました。",
@@ -221,46 +228,55 @@ export function createPlanningIntelligence(): PlanningIntelligence {
 
   return {
     async analyzeSchedule(input) {
-      const { output } = await generateText({
-        model,
-        output: Output.object({ schema: plannerOutputSchema }),
-        system: [
-          "あなたは個人の task planning assistant です。",
-          "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
-          "priorityOrder は scheduling の優先順です。締切、残り時間、負荷の偏りを見て並べてください。",
-          "高負荷 task を同じ日に詰め込みすぎない意図で優先順を作ってください。",
-          "tags は人が読める日本語にしてください。",
-        ].join("\n"),
-        prompt: JSON.stringify(
-          {
-            today: input.today,
-            tasks: input.tasks.map((task) => ({
-              id: task.id,
-              title: task.title,
-              notes: task.notes,
-              dueDate: task.dueDate,
-              remainingHours: Number((task.remainingMinutes / 60).toFixed(2)),
-              currentTaskType: task.taskType,
-              currentCognitiveLoad: task.cognitiveLoad,
-              currentEnergy: task.energy,
-              currentTags: task.tags,
-            })),
-            capacities: input.capacities.map((capacity) => ({
-              date: capacity.date,
-              hours: Number((capacity.availableMinutes / 60).toFixed(2)),
-            })),
-            recentMutations: input.recentMutations,
-          },
-          null,
-          2,
-        ),
-      });
+      try {
+        const { output } = await generateText({
+          model,
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          output: Output.object({ schema: plannerOutputSchema }),
+          system: [
+            "あなたは個人の task planning assistant です。",
+            "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
+            "priorityOrder は scheduling の優先順です。締切、残り時間、負荷の偏りを見て並べてください。",
+            "高負荷 task を同じ日に詰め込みすぎない意図で優先順を作ってください。",
+            "tags は人が読める日本語にしてください。",
+          ].join("\n"),
+          prompt: JSON.stringify(
+            {
+              today: input.today,
+              tasks: input.tasks.map((task) => ({
+                id: task.id,
+                title: task.title,
+                notes: task.notes,
+                dueDate: task.dueDate,
+                remainingHours: Number((task.remainingMinutes / 60).toFixed(2)),
+                currentTaskType: task.taskType,
+                currentCognitiveLoad: task.cognitiveLoad,
+                currentEnergy: task.energy,
+                currentTags: task.tags,
+              })),
+              capacities: input.capacities.map((capacity) => ({
+                date: capacity.date,
+                hours: Number((capacity.availableMinutes / 60).toFixed(2)),
+              })),
+              recentMutations: input.recentMutations,
+            },
+            null,
+            2,
+          ),
+        });
 
-      return {
-        annotations: output.annotations,
-        priorityOrder: output.priorityOrder,
-        rationale: output.rationale,
-      };
+        return {
+          annotations: output.annotations,
+          priorityOrder: output.priorityOrder,
+          rationale: output.rationale,
+        };
+      } catch (error) {
+        return heuristicPlanner(
+          `LLM 推論に失敗したため簡易推定にフォールバックしました: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        ).analyzeSchedule(input);
+      }
     },
   };
 }
