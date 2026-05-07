@@ -1,9 +1,3 @@
-import type {
-  DashboardRepository,
-  DashboardTaskBucket,
-  DashboardTaskHeader,
-  DashboardWeeklyBucket,
-} from "@task-platform/application";
 import type { SqliteDatabase } from "./db";
 
 function startOfWeek(date: string): string {
@@ -42,7 +36,31 @@ function sumByWeek<T extends { week_start: string; minutes: number }>(
   return map;
 }
 
-export class SqliteDashboardRepository implements DashboardRepository {
+type DashboardWeeklyBucket = {
+  weekStart: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+  completedTaskCount: number;
+  completionRate: number;
+};
+
+type DashboardTaskBucket = {
+  weekStart: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+};
+
+type DashboardTaskHeader = {
+  taskId: string;
+  title: string;
+  totalEstimatedMinutes: number;
+  remainingMinutes: number;
+  loggedMinutes: number;
+  progressRate: number;
+  dueDate: string | null;
+};
+
+export class SqliteDashboardRepository {
   constructor(private readonly db: SqliteDatabase) {}
 
   async getWeeklySummary(input: {
