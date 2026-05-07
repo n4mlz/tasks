@@ -6,33 +6,34 @@ This document defines the current target design for the single-user Task Platfor
 
 The system is meant to reduce cognitive load by separating:
 
-- a control plane for inbox capture, estimate updates, deadline editing, day-capacity editing, and proposal review
-- a data plane where the user mostly looks at today's assigned work and records execution feedback
+- a control plane for task capture, task editing, capacity editing, and schedule inspection
+- a daily execution plane where the user mostly looks at today's assigned work and records what was done
+- an analysis plane where the user reviews weekly trends and task-by-task progress
 
-The platform is always-on, single-user, proposal-driven, and available through both a Web UI and an MCP server. Hermes Agent is an important target consumer, but the integration model must remain agent-agnostic and rely on MCP function calling rather than Hermes-specific behavior.
+The platform is always-on, single-user, Web-first, and available through both a Web UI and an MCP server.
 
-This revision extends the original MVP design in four ways:
+Hermes Agent is an important target consumer, but the integration model must remain agent-agnostic:
 
-- scheduling must operate over a real multi-day horizon rather than near-today only
-- the Web UI must be usable by a human without depending on MCP for routine operations
-- task properties must support lightweight work-shape hints for better scheduling
-- the UI must become a modern personal dashboard rather than an unstyled technical placeholder
+- MCP is used for `LLM -> app` monitoring and control
+- a provider-compatible LLM endpoint is used for `app -> LLM` task classification and scheduling intent
 
-This follow-up revision extends that design in four additional ways:
+This revision reflects the current product direction:
 
-- capacity planning must be driven by arbitrary date input rather than a fixed current-week-only surface
-- the system must expose planning-health warnings when capacity entries are missing within the next 7 days
-- the Today view must behave as a true daily execution surface rather than a generic schedule dump
-- the Web UI must be rebuilt on a modern component and styling foundation rather than incremental inline-style patching
+- scheduling is deferred and runs automatically after edits settle, rather than on every keystroke
+- schedule updates no longer go through a proposal-approval tab
+- LLM inference is used for task-shape analysis and scheduling guidance, but final schedules are validated deterministically
+- the Web UI must support routine use without requiring MCP
+- a dedicated dashboard must expose weekly and per-task progress trends through charts
 
 ## Goals
 
-- Let the user offload tasks into an inbox instead of holding them in working memory.
+- Let the user offload tasks into Inbox instead of holding them in working memory.
 - Provide a trustworthy daily plan where finishing today's list means things are progressing safely.
-- Allow week-level capacity planning with explicit buffer.
-- Keep schedule mutations proposal-based and human-approved.
-- Expose the same core model to Web UI and MCP clients.
-- Support lightweight agent assistance for planning, summarization, and progress evaluation.
+- Allow arbitrary-date capacity input through a calendar surface.
+- Re-run scheduling automatically after changes settle, without interrupting the user mid-edit.
+- Validate that the resulting schedule is internally consistent before adopting it.
+- Expose the same core state to Web UI and MCP clients.
+- Support agent assistance for classification, scheduling, and progress evaluation.
 - Make the interface pleasant enough for daily personal use on desktop and mobile.
 
 ## Non-Goals
@@ -40,10 +41,29 @@ This follow-up revision extends that design in four additional ways:
 - Habit tracking
 - Multi-user support
 - External LMS or task-service integration
-- Agent auto-approval of schedule changes
-- ML-heavy prediction or opaque optimization
+- Opaque ML optimization
 - Push-notification systems
-- Complex portfolio/project hierarchy
+- Complex project / portfolio hierarchy
+
+## Product Model
+
+The product now has five user-facing surfaces:
+
+- `Today`
+- `Inbox`
+- `計画`
+- `ダッシュボード`
+- `ログ`
+
+Their responsibilities are intentionally split:
+
+- `Today` is for doing and recording work
+- `Inbox` is for adding and lightly editing tasks
+- `計画` is for entering available time and inspecting schedule placement
+- `ダッシュボード` is for understanding progress trends
+- `ログ` is for understanding what changed and when scheduling ran
+
+There is no longer a user-facing proposal review surface.
 
 ## Architecture
 
@@ -55,8 +75,8 @@ Core principles:
 - Web UI and MCP server call the same application layer
 - persistence stays abstracted through repositories
 - SQLite remains the initial backend
-- schedule generation is explainable and deterministic
-- proposal approval remains the only way to update the active schedule
+- schedule generation is explainable and deterministic after LLM-assisted ordering
+- schedule adoption is immediate only after deterministic validation succeeds
 
 ### High-Level Components
 
@@ -66,26 +86,39 @@ Provides user-facing views for:
 
 - Today
 - Inbox
-- Week
-- Proposals
+- 計画
+- ダッシュボード
+- ログ
 
 The Web application must cover routine usage end-to-end:
 
 - create and edit tasks
+- delete tasks
 - create and edit day capacities
-- review and approve proposals
 - record work performed
-- inspect current metrics
+- inspect current schedule
+- inspect scheduling state and countdown
+- inspect metrics and historical trends
 
 #### HTTP API
 
-Provides JSON endpoints for the Web application. The API is internal-facing but should remain consistent enough to support future clients.
+Provides JSON endpoints for the Web application.
+
+The API is internal-facing but should remain stable enough that MCP and future clients can mirror the same operations when appropriate.
 
 #### MCP Server
 
-Exposes task, capacity, schedule, and metrics operations to Hermes Agent and any other MCP-capable client.
+Exposes monitoring and control operations to Hermes Agent and any other MCP-capable client.
 
-The MCP server may help generate proposals, summarize them, or inspect progress, but it does not bypass human approval of schedule changes.
+MCP is not used as the app's internal scheduling engine. Instead it is used so agents can:
+
+- add, edit, or delete tasks
+- record work
+- edit capacities
+- inspect schedule state
+- inspect metrics
+- inspect planning health
+- delay or trigger scheduling
 
 #### Application Layer
 
@@ -93,13 +126,17 @@ Implements use cases such as:
 
 - create task
 - update task
+- delete task
 - log work
 - set capacity
-- generate schedule proposal
-- approve proposal
-- reject proposal
+- get current schedule
 - get metrics
 - get planning health
+- get scheduler status
+- delay scheduling
+- run scheduler tick
+- get weekly dashboard summary
+- get task dashboard timeline
 
 #### Domain Layer
 
@@ -107,10 +144,11 @@ Contains:
 
 - task model
 - capacity model
-- schedule proposal model
+- schedule model
 - scheduling heuristics
-- buffer handling
-- risk summary generation
+- LLM result normalization
+- schedule validation
+- planning-health rules
 
 #### Infrastructure Layer
 
@@ -118,21 +156,24 @@ Implements:
 
 - SQLite repositories
 - migrations
-- workspace path resolution
+- workspace-root path resolution
 - ID generation
 - clock abstraction
+- scheduler state persistence
 
 #### Scheduler Orchestrator
 
-Handles proposal regeneration when relevant state changes:
+Handles asynchronous schedule regeneration after relevant mutations:
 
 - task created
 - task updated
+- task deleted
 - work logged
 - capacity updated
-- manual generation requested
+- explicit immediate run requested
+- scheduling delay requested
 
-For now this remains in-process and synchronous enough to keep the implementation simple.
+The scheduler runs in-process on the Web server for now.
 
 ## Repository Structure
 
@@ -145,7 +186,6 @@ packages/
   application/
   infrastructure/
   contracts/
-  scheduler/
 docs/
   superpowers/
     specs/
@@ -154,8 +194,6 @@ docs/
 
 ## Domain Model
 
-Inbox remains a filtered task state rather than a separate entity.
-
 ### Task
 
 Fields:
@@ -163,21 +201,22 @@ Fields:
 - `id`
 - `title`
 - `notes`
-- `status`: `inbox | active | done | archived`
+- `status`: `active | done | archived`
 - `remainingMinutes`
 - `dueDate` nullable
-- `urgency`: `today | soon | normal`
-- `taskType`: `deep | shallow | admin | research | writing | implementation | unknown`
-- `energy`: `low | medium | high | unknown`
+- `taskType`
+- `cognitiveLoad`
+- `energy`
+- `tags`
 - `createdAt`
 - `updatedAt`
 
-Rationale:
+Design notes:
 
 - `remainingMinutes` remains the central planning quantity
-- `dueDate` and `urgency` control explicit user intent
-- `taskType` and `energy` provide lightweight scheduling hints without requiring heavy modeling
-- `unknown` is preferred over null so every layer can reason consistently
+- there is no user-facing `inbox` status; Inbox is a view over active tasks
+- task-shape metadata is primarily inferred by the LLM, not manually filled every time
+- `energy` means activation cost / body-and-mind effort needed to start and continue the task
 
 ### TaskWorkLog
 
@@ -198,321 +237,445 @@ Fields:
 
 - `date`
 - `availableMinutes`
-- `bufferMinutes`
 
-The user may enter capacity for any date, edit it later, and use it to shape a week-level plan.
+Design notes:
 
-### ScheduleProposal
+- `availableMinutes` means the maximum amount of time the user is willing to allocate to tasks that day
+- buffer is not directly edited by the user
+- any internal buffer or caution logic belongs to scheduling heuristics, not to the input surface
 
-Fields:
+### CurrentSchedule
 
-- `id`
-- `status`: `pending | approved | rejected | superseded`
-- `reason`: `task_created | task_updated | work_logged | capacity_updated | manual`
-- `generatedAt`
-- `horizonStart`
-- `horizonEnd`
-- `summaryJson`
+The system stores the active plan directly rather than keeping a user-visible proposal queue.
 
-`summaryJson` must contain, at minimum:
+Core data:
 
-- `riskFlags`
-- `unscheduledTaskIds`
-- `capacityPressureByDate`
+- schedule slices by task and date
+- schedule summary
+- schedule revision metadata
 
-### ScheduledTaskSlice
+### SchedulerState
 
 Fields:
 
-- `id`
-- `proposalId`
-- `taskId`
-- `date`
-- `plannedMinutes`
-- `kind`: `focus | buffer_fill`
+- `currentRevision`
+- `lastScheduledRevision`
+- `lastMutationAt`
+- `lastScheduledAt`
+- `nextEligibleRunAt`
+- `schedulerStatus`: `idle | pending | running | failed`
 
-## Scheduling Rules
+Purpose:
 
-The scheduler must become horizon-based rather than near-today-only.
+- debounce scheduling after edits
+- avoid running in the middle of active editing
+- expose a human-readable countdown to the Web UI
+- support safe restart or retry behavior
 
-### Horizon Selection
+### SchedulingRunLog
 
-- Start at `today`
-- End at `max(latest due date - 1 day, today + 6 days)`
-- If there are no due dates, still plan at least through the next 7 days
+Each run stores:
 
-### Capacity Handling
+- revision targeted
+- started / finished timestamps
+- success / failed / superseded outcome
+- readable rationale from the LLM
+- validation result
+- error message when failed
 
-- Read all capacities within the horizon
-- Use `usableMinutes = max(availableMinutes - bufferMinutes, 0)`
-- Missing capacity days are treated as zero-capacity unless a future policy changes that
+### PlanningMutationLog
 
-### Ordering Heuristics
+Each planning mutation stores:
 
-Tasks are ordered using:
+- revision
+- mutation type
+- timestamp
+- optional related task/date identifier
 
-1. `urgency=today`
-2. earlier `dueDate`
-3. work-shape hints
-4. creation order
+This supports the `ログ` page and scheduler reasoning.
 
-Work-shape handling:
+## Scheduling Model
 
-- `deep` and `high` energy tasks should prefer higher-capacity days
-- `admin` and `shallow` tasks may use tighter remaining gaps
-- `unknown` behaves neutrally
+Scheduling is delayed rather than immediate.
 
-### Deadline Safety
+### Trigger Model
 
-- Work is assigned before the due date rather than on it
-- If work cannot fit before the deadline, the task is flagged in `riskFlags`
-- Unplaced work must appear in `unscheduledTaskIds`
+Mutations mark the schedule as dirty:
 
-### Proposal Summary
+- task add / edit / delete
+- work log
+- capacity add / edit
 
-Each proposal must summarize:
+The scheduler becomes eligible when:
 
-- unscheduled tasks
-- which days are over pressure or near exhaustion
-- whether today is overloaded
+- there is an unscheduled revision
+- at least 3 minutes have passed since the last mutation
+- no scheduler run is currently active
 
-The summary must be sufficiently readable for both UI rendering and MCP summarization.
+The user may also:
 
-## Planning Health
+- delay the next run by 3 minutes
+- trigger an immediate run
 
-The system needs a lightweight planning-health model so both Web UI and MCP clients can detect when the planning surface is incomplete even before scheduling quality is evaluated.
+### Concurrency Model
 
-Planning health must include:
-
-- `missingCapacityDatesWithin7Days`
-- `warningCount`
+The scheduler must remain safe if edits happen while a run is executing.
 
 Rules:
 
-- the check window is always `today..today+6`
-- if any date in that window has no stored capacity row, that date appears in `missingCapacityDatesWithin7Days`
-- this warning is independent of whether schedulable tasks currently exist
-- missing capacity continues to behave as zero-capacity for scheduling, but it must also surface as a warning
+- a run starts against a fixed `targetRevision`
+- if newer changes appear during execution, the finished run may be marked `superseded`
+- only a run for the latest applicable revision may become the active schedule
+- failed runs must not corrupt the last good schedule
 
-The purpose is to let both the human and the agent notice that planning confidence is degraded because the near-term capacity envelope is incomplete.
+This ensures that leaving the page, reloading, or editing during a run does not produce inconsistent state.
+
+### Horizon Selection
+
+- start at `today`
+- end at the latest relevant due date, with at least a near-term planning window
+- allow due-today tasks to still be scheduled on today
+
+### Capacity Handling
+
+- read all capacities inside the horizon
+- missing capacity behaves as zero capacity
+- missing capacity also contributes to planning-health warnings
+- if total capacity is clearly insufficient, the scheduler may fail fast and ask the user to revisit the plan
+
+### LLM-Assisted Ordering
+
+The app sends the LLM:
+
+- the new or edited task, including `notes`
+- the set of active tasks
+- current capacities
+- existing task metadata when present
+
+The LLM returns:
+
+- inferred task metadata
+- relative scheduling rationale
+- ordering / grouping guidance
+
+The LLM is advisory, not authoritative.
+
+The final schedule is still built and validated in application/domain logic.
+
+### Validation
+
+The resulting schedule must be validated before adoption.
+
+Validation must ensure at minimum:
+
+- no slice references an unknown task
+- no slice references an unknown date
+- no slice has non-positive minutes
+- no slice is placed after the latest schedulable date for its task
+- no day exceeds its capacity
+
+Unscheduled work is not a structural validation failure by itself.
+
+Instead, unscheduled or under-scheduled work must surface through:
+
+- human-readable warnings
+- risk flags
+- shortage metrics
+
+### Failure Policy
+
+If LLM inference fails:
+
+- the run becomes `failed`
+- the last valid schedule stays active
+- the failure appears in `ログ`
+
+The app must not fall back to heuristic pseudo-inference that pretends to be intelligent.
+
+## Planning Health
+
+Planning health is separate from progress metrics.
+
+It must include:
+
+- `missingCapacityDatesWithin7Days`
+- `warningCount`
+- `shortfallMinutes` for the current horizon when total capacity is insufficient
+
+Rules:
+
+- the warning window is always `today..today+6`
+- any date in that range without a capacity row is reported
+- if total capacity cannot cover required task time in the relevant horizon, the shortfall is reported
+
+The purpose is to let both the human and the agent notice when planning confidence is degraded.
 
 ## Web UI
 
-The UI direction is a modern personal planning console built for dense daily use, not a dense enterprise CRUD screen and not a calendar-only surface.
+The UI direction is a modern, quiet planning console.
 
-### UI Foundation
+It must avoid:
 
-The redesign should standardize the frontend on:
+- verbose headings and explanation boxes
+- raw internal identifiers
+- repeated status blocks that do not help decisions
 
-- Tailwind CSS for layout, spacing, color, and responsive composition
-- shadcn/ui for reusable primitives and consistent interaction surfaces
-- project-local wrapper components for recurring product patterns such as metric cards, warning alerts, and status badges
+It must prefer:
 
-Inline style objects should be treated as legacy implementation and replaced as part of the redesign.
+- compact, human-readable summaries
+- minimal but clear interaction affordances
+- modal editing where inline editing would overcrowd the surface
 
-### Design Direction
+### Shared UI Foundation
 
-- Today is the primary screen
-- typography, spacing, color, and hierarchy must make the app comfortable for daily use
-- mobile-first one-column layouts should still work well on desktop
-- planning views should feel structured and calm rather than visually noisy
-- the interface should be intentionally styled, not raw HTML defaults
-- overall information density should be moderately high rather than sparse
-- the visual style should read as a practical planning console, not a marketing page
-- color should stay in a neutral `slate / zinc / white` range with restrained `amber`, `emerald`, and `rose` accents for state
-- warnings and risk should be highly visible without overwhelming the main execution flow
-
-### Shared Interaction Model
-
-The Web app should separate:
-
-- execution surfaces, where the user mostly reads and records work
-- planning surfaces, where the user edits capacities, reviews proposals, and inspects warnings
-
-This should be visible in the UI itself:
-
-- Today should feel lighter, faster, and more action-oriented
-- Week and Proposals should feel denser and more analytical
-- Inbox should optimize for quick capture first, lightweight editing second
-
-Shared UI primitives should include at least:
-
-- top-level app shell and navigation
-- metric card
-- warning alert
-- status badge
-- dense table/list containers
-- form row patterns for compact editing
+- Tailwind CSS for layout and responsive behavior
+- reusable modal / badge / tab / form primitives
+- information-dense but calm visual hierarchy
+- Japanese as the main user-facing language
 
 ### Today
 
 Purpose:
 
-- show the approved slices for the current plan
-- allow quick work logging
+- show only today's assigned tasks
+- let the user record what was done
 
 Must support:
 
-- viewing only slices scheduled for the current date
-- seeing the active proposal/source plan
-- seeing a compact day summary before the task list
-- entering `spentMinutes`
-- entering `remainingMinutesAfter`
-- optional work-log note
-- seeing a lightweight planning-health warning when near-term capacities are missing
-- being usable as the main page the user opens every day
-
-Preferred structure:
-
-- top summary strip
-- current warnings / confidence state
-- dense list of today's slices
-- quick logging controls attached directly to each slice
+- current-day slices only
+- work log modal
+- `spent time`
+- editable `remaining time`
+- complete-task toggle
+- compact planning-health warning
+- compact scheduler status
 
 ### Inbox
 
 Purpose:
 
 - capture tasks quickly
-- review and lightly edit them
+- lightly edit them
 
 Must support:
 
-- create task with `title`, `remainingMinutes`, `dueDate`, `urgency`, `taskType`, `energy`, `notes`
+- create task with `title`, `required time`, `due date`, `notes`
 - edit existing task properties
-- distinguish inbox vs active/done state
-- keep capture fast even when richer metadata is available
+- mark task done
+- delete task with confirmation
 
-Preferred structure:
+Human input should stay lightweight.
 
-- compact capture form at the top
-- editable task list below
-- visible badges for urgency, type, energy, and status
+The user should not be required to manually fill detailed scheduling metadata every time.
 
-### Week
+### 計画
 
 Purpose:
 
-- edit capacities for arbitrary dates
-- inspect near-term pressure and metrics
+- enter available time for arbitrary dates
+- inspect how tasks are distributed
 
 Must support:
 
-- a `referenceDate`-driven view rather than a fixed current-week-only screen
-- a 7-day window anchored to the selected reference date
-- direct arbitrary-date jump
-- previous / today / next navigation for quick movement
-- editing `availableMinutes` and `bufferMinutes` per date
-- seeing a week-scale view of capacity entries
-- seeing metrics and pressure signals
-- seeing warning banners for missing capacity dates within the next 7 days
+- month calendar view
+- editing a day by clicking its cell and opening a modal
+- highlighting today
+- editing days outside the current month grid if they are visible in the calendar
+- task overview with:
+  - total estimated time
+  - remaining time
+  - progress rate
+  - due date
+  - cumulative logged time
+  - assigned schedule preview
 
-Preferred structure:
+The calendar is an input surface, not only a display.
 
-- compact navigation and date-jump controls at the top
-- a dense planning summary row
-- a table-like or grid-like 7-day capacity editor
-- visible warning state before the editable rows
-
-The Week surface should feel closer to a planning console than to a stack of large disconnected cards.
-
-### Proposals
+### ダッシュボード
 
 Purpose:
 
-- review generated schedule changes before activation
+- show progress trends rather than input controls
 
-Must support:
+Structure:
 
-- list pending proposals
-- inspect proposal details
-- inspect `riskFlags`
-- inspect `unscheduledTaskIds`
-- inspect `capacityPressureByDate`
-- approve or reject
+- one `ダッシュボード` route
+- tabs: `週次` and `タスク別`
 
-Preferred structure:
+#### 週次 Tab
 
-- a compact review list
-- dense detail sections for risk and capacity pressure
-- approval actions that remain visible without excessive scrolling
+Shows the last 8 weeks.
+
+Needs:
+
+- weekly grouped bar chart
+- `planned` and `actual` hours shown side by side
+- compact summaries for:
+  - this week's planned hours
+  - this week's actual hours
+  - this week's completion rate
+  - completed task count
+
+This view should feel like a personal progress dashboard, similar in spirit to study-time tracking apps, while staying visually restrained.
+
+#### タスク別 Tab
+
+Shows one task at a time.
+
+Needs:
+
+- task selector
+- last 8 weeks of planned vs actual hours for that task
+- compact summary for:
+  - total estimated hours
+  - remaining hours
+  - progress rate
+  - due date
+  - cumulative logged hours
+
+The selector should default to a useful current task rather than an empty state whenever possible.
+
+### ログ
+
+Purpose:
+
+- explain what changed and when scheduling ran
+
+Must show:
+
+- mutation history
+- scheduling runs
+- validation failures
+- inference failures
+- superseded runs
+
+The page should auto-refresh when scheduling state changes, even if the user stays on it.
+
+## Dashboard Data Model
+
+The dashboard requires two additional aggregate read models.
+
+### Weekly Summary
+
+For the last 8 weeks, return:
+
+- `weekStart`
+- `plannedMinutes`
+- `actualMinutes`
+- `completedTaskCount`
+- `completionRate`
+
+### Task Timeline
+
+For one selected task and the last 8 weeks, return:
+
+- `weekStart`
+- `plannedMinutes`
+- `actualMinutes`
+
+Also return task header data:
+
+- `totalEstimatedMinutes`
+- `remainingMinutes`
+- `loggedMinutes`
+- `progressRate`
+- `dueDate`
 
 ## MCP Surface
 
-The MCP server should continue exposing the current capability categories:
+MCP is the monitoring and control plane for external agents.
 
-- task operations
-- capacity operations
-- schedule operations
-- metrics operations
-- planning health operations
+It should support all meaningful Web-side operations that matter for conversational use, including:
 
-The contract must be extended to support new task attributes and richer proposal summaries.
+- create task
+- update task
+- delete task
+- list tasks
+- log work
+- list work logs
+- set capacity
+- inspect current schedule
+- inspect planning health
+- inspect metrics
+- inspect scheduler status
+- delay scheduler
+- trigger immediate scheduler run
 
-Expected usage patterns:
+This allows agents to handle requests such as:
 
-- agent captures tasks into inbox
-- agent updates capacities
-- agent generates proposals
-- agent summarizes proposal risk
-- agent reads metrics for daily or weekly coaching
-- agent reads planning-health warnings to detect missing near-term capacities
-- human approves the final plan
+- "今日中に返信が必要だから task を追加して"
+- "今日やる task を教えて"
+- "今日どれくらいやったか評価して"
+- "今週どれくらいやったか評価して"
 
-This preserves a clean split:
+## LLM Endpoint Integration
 
-- system and agents assist with planning
-- the user keeps approval authority
-- everyday execution can still happen through Web UI alone
+The app must support provider-compatible local LLM endpoints, especially OpenAI-compatible ones.
+
+Configuration is provided through environment variables.
+
+Requirements:
+
+- support OpenAI-compatible local endpoints
+- support providers that do not fully implement `response_format`
+- when structured outputs are unavailable, fall back to plain JSON prompting, not heuristic classification
+- include enough context to infer task shape from title and notes
+
+The app must never silently pretend inference happened when it actually did not.
 
 ## Metrics
 
-The current minimal metrics remain valid:
+Core metrics remain:
 
 - planned minutes
 - actual minutes
 - completed minutes
 - at-risk task count
-- pending proposal count
 
-This revision also expects the backend to support week-level evaluation more naturally, even if the first implementation remains compact.
-
-Planning health remains separate from metrics. Metrics describe observed progress and schedule state, while planning health describes whether the near-term capacity input is sufficiently complete for the plan to be trustworthy.
+The dashboard extends the read model with weekly and task-specific trend views, but planning health remains a separate concept.
 
 ## Data Ownership Model
 
 The intended operating model is:
 
-- most planning mutations can be performed either from Web UI or MCP
-- daily human use should not require MCP
-- agent intervention is primarily valuable for schedule generation, explanation, and progress evaluation
+- the user lives mostly in the Web UI
+- agents use MCP to inspect and help, but are not required for normal operation
+- LLM scheduling support happens inside the app against a configured endpoint
 
 In other words:
 
-- Web UI must be sufficient for normal operation
-- MCP must be helpful, not mandatory
-- the user should be able to live primarily in the Web UI and only occasionally care that an agent is participating
+- Web UI must be sufficient for day-to-day operation
+- MCP must expose equivalent operational controls where that makes sense
+- agents can observe, evaluate, and mutate the same planning state
 
-## Migration / Cleanup Requirement
+## Documentation Hygiene
 
-This work also includes repository hygiene for public-facing documentation:
+Public-facing docs must not contain local absolute paths.
 
-- no local absolute paths in README or public docs
-- existing leaked local-path history must be rewritten when still on unpublished or branch-local history that can safely be force-pushed
+This includes:
+
+- README
+- specs
+- plans
+- any public usage examples
 
 ## Acceptance Criteria
 
 The design is considered satisfied when:
 
 - users can enter and edit task and capacity data through the Web UI
-- users can log work from the Today view
+- users can log work from Today
 - Today shows only current-day execution items
-- schedule proposals cover a real multi-day horizon
-- proposals expose enough detail to understand risk and missing allocations
-- MCP tools support the same enhanced model
-- metrics remain accessible for agents and UI
+- scheduling runs asynchronously after edits settle
+- users can delay or immediately trigger scheduling from the UI
+- scheduling remains safe if edits occur during a run
+- failed inference does not replace the last valid schedule
+- schedule adoption is gated by deterministic validation
 - planning-health warnings are accessible from both Web UI and MCP
-- the UI is intentionally styled for day-to-day human use on top of Tailwind CSS and shadcn/ui primitives
-- the Week view is driven by arbitrary dates rather than a fixed current week
-- the information density is high enough that repeated daily use does not feel wasteful
+- the app exposes a dedicated ダッシュボード route
+- the dashboard has `週次` and `タスク別` tabs
+- the weekly dashboard shows the last 8 weeks of planned vs actual hours
+- the task dashboard shows one selected task's last 8 weeks of planned vs actual hours
+- MCP supports the same meaningful operational controls exposed by the Web UI
+- the UI is intentionally styled for repeated human use without redundant explanatory clutter
 - documentation no longer contains leaked local absolute paths
