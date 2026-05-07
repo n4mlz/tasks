@@ -47,6 +47,7 @@ export interface SchedulerStateRepository {
   tryStartRun(input: {
     now: string;
     debounceMilliseconds: number;
+    force?: boolean;
   }): Promise<
     | { started: false; state: Awaited<ReturnType<SchedulerStateRepository["getState"]>> }
     | {

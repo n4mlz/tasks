@@ -30,13 +30,6 @@ export const energyLabels: Record<string, string> = {
   unknown: "体力 未設定",
 };
 
-export const statusLabels: Record<string, string> = {
-  inbox: "inbox",
-  active: "進行中",
-  done: "完了",
-  archived: "保管",
-};
-
 export const schedulerMutationLabels: Record<string, string> = {
   task_created: "タスクを追加",
   task_updated: "タスクを更新",

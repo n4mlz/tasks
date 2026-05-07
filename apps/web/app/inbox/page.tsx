@@ -6,20 +6,16 @@ import { TaskIntakeFlow } from "../../components/task-intake-flow";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Input } from "../../components/ui/input";
-import { Select } from "../../components/ui/select";
 import { Textarea } from "../../components/ui/textarea";
 import { taskPlatform } from "../../lib/task-platform";
 import {
   cognitiveLoadLabels,
   energyLabels,
   formatHoursFromMinutes,
-  statusLabels,
   taskTypeLabels,
 } from "../../lib/presentation";
 
 export const dynamic = "force-dynamic";
-
-const statusOptions = ["inbox", "active", "done", "archived"] as const;
 
 export default async function InboxPage() {
   const tasks = (await taskPlatform.listTasks()) as Array<{
@@ -66,7 +62,9 @@ export default async function InboxPage() {
                       <CardTitle className="text-lg tracking-[-0.03em]">{task.title}</CardTitle>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge>{formatHoursFromMinutes(task.remainingMinutes)}</StatusBadge>
-                        <StatusBadge tone="secondary">{statusLabels[task.status] ?? task.status}</StatusBadge>
+                        {task.status === "done" ? (
+                          <StatusBadge tone="secondary">完了</StatusBadge>
+                        ) : null}
                         <StatusBadge tone="outline">
                           {task.dueDate ? `期限 ${task.dueDate}` : "期限なし"}
                         </StatusBadge>
@@ -118,14 +116,14 @@ export default async function InboxPage() {
                         <Input defaultValue={task.dueDate ?? ""} name="dueDate" type="date" />
                       </label>
                       <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        状態
-                        <Select defaultValue={task.status} name="status">
-                          {statusOptions.map((option) => (
-                            <option key={option} value={option}>
-                              {statusLabels[option]}
-                            </option>
-                          ))}
-                        </Select>
+                        完了
+                        <input
+                          className="h-4 w-4 rounded border-slate-300 text-slate-950"
+                          defaultChecked={task.status === "done"}
+                          name="done"
+                          type="checkbox"
+                          value="true"
+                        />
                       </label>
                     </div>
                     <input name="taskType" type="hidden" value={task.taskType ?? "unknown"} />

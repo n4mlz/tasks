@@ -12,6 +12,11 @@ async function applyTaskUpdate(
   const json = contentType.includes("application/json")
     ? await request.json()
     : Object.fromEntries((await request.formData()).entries());
+  const done =
+    json.done === true ||
+    json.done === "true" ||
+    json.done === "on" ||
+    Number(json.remainingMinutes) === 0;
 
   await taskPlatform.updateTask({
     taskId: params.taskId,
@@ -33,7 +38,7 @@ async function applyTaskUpdate(
     tags: Array.isArray(json.tags)
       ? json.tags.filter((value: unknown): value is string => typeof value === "string")
       : undefined,
-    status: json.status,
+    status: done ? "done" : "active",
     notes: typeof json.notes === "string" ? json.notes : undefined,
   });
 

@@ -65,7 +65,7 @@ export class SqliteTaskRepository {
         `
           SELECT *
           FROM tasks
-          WHERE status IN ('inbox', 'active') AND remaining_minutes > 0
+          WHERE status = 'active' AND remaining_minutes > 0
           ORDER BY created_at ASC
         `,
       )

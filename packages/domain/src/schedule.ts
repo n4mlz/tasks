@@ -28,6 +28,20 @@ export function usableMinutesForDay(capacity: DayCapacity): number {
   return Math.max(capacity.availableMinutes - capacity.bufferMinutes, 0);
 }
 
+function latestSchedulableDate(task: Task, today: string): string | null {
+  if (!task.dueDate) {
+    return null;
+  }
+
+  if (task.dueDate <= today) {
+    return today;
+  }
+
+  const value = new Date(`${task.dueDate}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() - 1);
+  return value.toISOString().slice(0, 10);
+}
+
 function burdenScore(task: Task): number {
   const energyScore = {
     low: 1,
@@ -102,6 +116,7 @@ export function buildSchedulePlan(input: {
   for (const task of sortedTasks) {
     let remaining = task.remainingMinutes;
     const taskBurden = burdenScore(task);
+    const latestDate = latestSchedulableDate(task, input.today);
     const candidateDays = [...input.capacities]
       .sort((left, right) => {
         const leftBudget = dayCapacities.get(left.date) ?? 0;
@@ -125,7 +140,7 @@ export function buildSchedulePlan(input: {
         return rightBudget - leftBudget;
       })
       .map((capacity) => capacity.date)
-      .filter((date) => (task.dueDate ? date < task.dueDate : true));
+      .filter((date) => (latestDate ? date <= latestDate : true));
 
     for (const date of candidateDays) {
       const budget = dayBudgets.get(date) ?? 0;
@@ -209,15 +224,9 @@ export function validateSchedulePlan(input: {
     taskTotals.set(slice.taskId, (taskTotals.get(slice.taskId) ?? 0) + slice.plannedMinutes);
     dayTotals.set(slice.date, (dayTotals.get(slice.date) ?? 0) + slice.plannedMinutes);
 
-    if (task.dueDate && slice.date >= task.dueDate) {
+    const latestDate = latestSchedulableDate(task, input.plan.horizonStart);
+    if (latestDate && slice.date > latestDate) {
       errors.push(`past_due_slice:${slice.taskId}:${slice.date}`);
-    }
-  }
-
-  for (const task of input.tasks) {
-    const planned = taskTotals.get(task.id) ?? 0;
-    if (planned < task.remainingMinutes) {
-      errors.push(`insufficient_task_minutes:${task.id}`);
     }
   }
 

@@ -13,7 +13,7 @@ type DeleteTaskDialogProps = {
 export function DeleteTaskDialog({ taskId, title }: DeleteTaskDialogProps) {
   return (
     <Modal
-      description="削除すると task 本体は一覧から消えます。必要なら後で inbox から作り直してください。"
+      description="削除すると task 本体は一覧から消えます。必要なら後で追加し直してください。"
       title={`「${title}」を削除しますか`}
       trigger={
         <Button type="button" variant="outline">

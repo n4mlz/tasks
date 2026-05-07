@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { taskPlatformMock } = vi.hoisted(() => ({
+const { taskPlatformMock, refreshMock } = vi.hoisted(() => ({
   taskPlatformMock: {
     listTasks: vi.fn(),
     getCurrentSchedule: vi.fn(),
@@ -13,6 +13,7 @@ const { taskPlatformMock } = vi.hoisted(() => ({
     getMetrics: vi.fn(),
     getWorkLogs: vi.fn(),
   },
+  refreshMock: vi.fn(),
 }));
 
 vi.mock("../lib/task-platform", () => ({
@@ -22,7 +23,7 @@ vi.mock("../lib/task-platform", () => ({
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({
-    refresh: vi.fn(),
+    refresh: refreshMock,
   }),
 }));
 
@@ -67,6 +68,7 @@ describe("Web UI", () => {
               lastScheduledRevision: 1,
               lastMutationAt: null,
               lastScheduledAt: "2026-04-28T08:30:00.000Z",
+              latestRunAt: "2026-04-28T08:30:00.000Z",
               schedulerStatus: "idle",
               runningRevision: null,
               hasPendingChanges: false,
@@ -99,7 +101,7 @@ describe("Web UI", () => {
         tags: ["軽作業寄り"],
         remainingMinutes: 30,
         dueDate: null,
-        status: "inbox",
+        status: "active",
       },
     ]);
     taskPlatformMock.getCurrentSchedule.mockResolvedValue({
@@ -136,6 +138,7 @@ describe("Web UI", () => {
   });
 
   it("renders the daily execution heading", async () => {
+    vi.useRealTimers();
     render(await HomePage());
     expect(screen.getByRole("heading", { name: "今日" })).toBeInTheDocument();
   });
@@ -163,6 +166,7 @@ describe("Web UI", () => {
             lastScheduledRevision: 1,
             lastMutationAt: "2026-04-28T08:59:00.000Z",
             lastScheduledAt: "2026-04-28T08:30:00.000Z",
+            latestRunAt: "2026-04-28T08:30:00.000Z",
             schedulerStatus: "pending",
             runningRevision: null,
             hasPendingChanges: true,
@@ -175,6 +179,82 @@ describe("Web UI", () => {
 
     render(<SchedulerStatus />);
     expect(await screen.findByRole("button", { name: "3分延長" })).toBeInTheDocument();
+  });
+
+  it("shows a force-run button while not running", async () => {
+    vi.useRealTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: {
+            currentRevision: 2,
+            lastScheduledRevision: 1,
+            lastMutationAt: "2026-04-28T08:59:00.000Z",
+            lastScheduledAt: "2026-04-28T08:30:00.000Z",
+            latestRunAt: "2026-04-28T08:30:00.000Z",
+            schedulerStatus: "pending",
+            runningRevision: null,
+            hasPendingChanges: true,
+            nextRunAt: "2026-04-28T09:02:00.000Z",
+            secondsUntilNextRun: 120,
+          },
+        }),
+      }),
+    );
+
+    render(<SchedulerStatus />);
+    expect(await screen.findByRole("button", { name: "今すぐ再配分" })).toBeInTheDocument();
+  });
+
+  it("updates the badge and refreshes when an immediate rerun fails", async () => {
+    vi.useRealTimers();
+    let callCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        callCount += 1;
+        const status =
+          callCount === 1
+            ? {
+                currentRevision: 2,
+                lastScheduledRevision: 1,
+                lastMutationAt: "2026-04-28T08:59:00.000Z",
+                lastScheduledAt: "2026-04-28T08:30:00.000Z",
+                latestRunAt: "2026-04-28T08:30:00.000Z",
+                schedulerStatus: "pending",
+                runningRevision: null,
+                hasPendingChanges: true,
+                nextRunAt: "2026-04-28T09:02:00.000Z",
+                secondsUntilNextRun: 120,
+              }
+            : {
+                currentRevision: 2,
+                lastScheduledRevision: 2,
+                lastMutationAt: "2026-04-28T08:59:00.000Z",
+                lastScheduledAt: "2026-04-28T08:30:00.000Z",
+                latestRunAt: "2026-04-28T09:00:30.000Z",
+                schedulerStatus: "failed",
+                runningRevision: null,
+                hasPendingChanges: true,
+                nextRunAt: null,
+                secondsUntilNextRun: null,
+              };
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status }),
+        });
+      }),
+    );
+
+    render(<SchedulerStatus />);
+    fireEvent.click(await screen.findByRole("button", { name: "今すぐ再配分" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("要見直し")).toBeInTheDocument();
+      expect(refreshMock).toHaveBeenCalled();
+    });
   });
 
   it("shows only today's slices on the Today page", async () => {
@@ -204,6 +284,7 @@ describe("Web UI", () => {
 
     expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
     expect(screen.getAllByLabelText("期限").length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("状態")).toBeNull();
     expect(screen.queryByLabelText("緊急度")).toBeNull();
     expect(screen.queryByLabelText("task 種別")).toBeNull();
     expect(screen.queryByLabelText("energy")).toBeNull();

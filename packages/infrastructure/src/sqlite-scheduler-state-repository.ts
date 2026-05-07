@@ -116,6 +116,7 @@ export class SqliteSchedulerStateRepository {
   async tryStartRun(input: {
     now: string;
     debounceMilliseconds: number;
+    force?: boolean;
   }): Promise<
     | { started: false; state: Awaited<ReturnType<SqliteSchedulerStateRepository["getState"]>> }
     | {
@@ -168,17 +169,20 @@ export class SqliteSchedulerStateRepository {
       if (state.schedulerStatus === "running") {
         return { started: false as const, state };
       }
-      if (state.currentRevision <= state.lastScheduledRevision) {
+      if (!input.force && state.currentRevision <= state.lastScheduledRevision) {
         return { started: false as const, state };
       }
-      if (!state.lastMutationAt) {
+      if (!input.force && !state.lastMutationAt) {
         return { started: false as const, state };
       }
 
-      const elapsed =
-        new Date(input.now).getTime() - new Date(state.lastMutationAt).getTime();
-      if (elapsed < input.debounceMilliseconds) {
-        return { started: false as const, state };
+      if (!input.force) {
+        const lastMutationAt = state.lastMutationAt as string;
+        const elapsed =
+          new Date(input.now).getTime() - new Date(lastMutationAt).getTime();
+        if (elapsed < input.debounceMilliseconds) {
+          return { started: false as const, state };
+        }
       }
 
       this.db

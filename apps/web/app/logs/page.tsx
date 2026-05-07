@@ -39,6 +39,7 @@ export default async function LogsPage() {
   const status = (await taskPlatform.getSchedulerStatus()) as {
     schedulerStatus: string;
     lastScheduledAt: string | null;
+    latestRunAt: string | null;
     hasPendingChanges: boolean;
     secondsUntilNextRun: number | null;
   };

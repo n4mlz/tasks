@@ -2,11 +2,12 @@ import type { Clock, SchedulerStateRepository } from "../ports";
 
 export async function getSchedulerStatusUseCase(
   deps: {
-    schedulerStateRepository: Pick<SchedulerStateRepository, "getState">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "getState" | "listRuns">;
     clock: Clock;
   },
 ) {
   const state = await deps.schedulerStateRepository.getState();
+  const latestRun = (await deps.schedulerStateRepository.listRuns(1))[0];
   const hasPendingChanges =
     state.currentRevision > state.lastScheduledRevision ||
     state.schedulerStatus === "failed";
@@ -21,6 +22,7 @@ export async function getSchedulerStatusUseCase(
 
   return {
     ...state,
+    latestRunAt: latestRun?.startedAt ?? null,
     hasPendingChanges,
     nextRunAt,
     secondsUntilNextRun,

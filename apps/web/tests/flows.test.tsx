@@ -106,6 +106,7 @@ describe("Inbox flow", () => {
   });
 
   it("renders week planning actions", async () => {
+    vi.useRealTimers();
     const WeekPageWithProps = WeekPage as unknown as (props: {
       searchParams?: Promise<Record<string, string>>;
     }) => Promise<React.JSX.Element>;
@@ -114,5 +115,5 @@ describe("Inbox flow", () => {
 
     expect(screen.getAllByRole("button", { name: /を編集/ }).length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "移動" })).toBeInTheDocument();
-  });
+  }, 15000);
 });

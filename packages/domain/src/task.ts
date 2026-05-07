@@ -63,7 +63,7 @@ export function createTask(input: CreateTaskInput): Task {
     id: input.id,
     title: input.title.trim(),
     notes: input.notes ?? "",
-    status: input.status ?? "inbox",
+    status: input.status ?? "active",
     remainingMinutes: input.remainingMinutes,
     dueDate: input.dueDate ?? null,
     urgency: input.urgency ?? "normal",

@@ -11,6 +11,7 @@ type SchedulerStatusPayload = {
   lastScheduledRevision: number;
   lastMutationAt: string | null;
   lastScheduledAt: string | null;
+  latestRunAt: string | null;
   schedulerStatus: "idle" | "pending" | "running" | "failed";
   runningRevision: number | null;
   hasPendingChanges: boolean;
@@ -23,6 +24,21 @@ export function SchedulerStatus() {
   const [status, setStatus] = React.useState<SchedulerStatusPayload | null>(null);
   const [displaySecondsUntilNextRun, setDisplaySecondsUntilNextRun] = React.useState<number | null>(null);
   const previousRefreshKey = React.useRef<string | null>(null);
+  const applyStatus = React.useCallback((nextStatus: SchedulerStatusPayload) => {
+    setStatus(nextStatus);
+    setDisplaySecondsUntilNextRun(nextStatus.secondsUntilNextRun);
+    const nextRefreshKey = [
+      nextStatus.lastScheduledAt,
+      nextStatus.latestRunAt,
+      nextStatus.schedulerStatus,
+      nextStatus.currentRevision,
+      nextStatus.lastScheduledRevision,
+    ].join("|");
+    if (previousRefreshKey.current && previousRefreshKey.current !== nextRefreshKey) {
+      router.refresh();
+    }
+    previousRefreshKey.current = nextRefreshKey;
+  }, [router]);
 
   const poll = React.useCallback(async () => {
     const response = await fetch(new URL("/api/scheduler/tick", window.location.origin), {
@@ -34,19 +50,8 @@ export function SchedulerStatus() {
     const payload = (await response.json()) as {
       status: SchedulerStatusPayload;
     };
-    setStatus(payload.status);
-    setDisplaySecondsUntilNextRun(payload.status.secondsUntilNextRun);
-    const nextRefreshKey = [
-      payload.status.lastScheduledAt,
-      payload.status.schedulerStatus,
-      payload.status.currentRevision,
-      payload.status.lastScheduledRevision,
-    ].join("|");
-    if (previousRefreshKey.current && previousRefreshKey.current !== nextRefreshKey) {
-      router.refresh();
-    }
-    previousRefreshKey.current = nextRefreshKey;
-  }, [router]);
+    applyStatus(payload.status);
+  }, [applyStatus]);
 
   React.useEffect(() => {
     void poll();
@@ -102,8 +107,7 @@ export function SchedulerStatus() {
             });
             if (!response.ok) return;
             const payload = (await response.json()) as { status: SchedulerStatusPayload };
-            setStatus(payload.status);
-            setDisplaySecondsUntilNextRun(payload.status.secondsUntilNextRun);
+            applyStatus(payload.status);
             window.dispatchEvent(new Event("task-platform:planning-changed"));
           }}
           size="sm"
@@ -111,6 +115,29 @@ export function SchedulerStatus() {
           variant="outline"
         >
           3分延長
+        </Button>
+      ) : null}
+      {status.schedulerStatus !== "running" ? (
+        <Button
+          onClick={async () => {
+            const response = await fetch(new URL("/api/scheduler/tick", window.location.origin), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ force: true }),
+              cache: "no-store",
+            });
+            if (!response.ok) return;
+            const payload = (await response.json()) as { status: SchedulerStatusPayload };
+            applyStatus(payload.status);
+            window.dispatchEvent(new Event("task-platform:planning-changed"));
+          }}
+          size="sm"
+          type="button"
+          variant="secondary"
+        >
+          今すぐ再配分
         </Button>
       ) : null}
     </div>

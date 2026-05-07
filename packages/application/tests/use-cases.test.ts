@@ -361,6 +361,137 @@ describe("runSchedulerTickUseCase", () => {
       expect.objectContaining({ reason: "insufficient_capacity_window" }),
     );
   });
+
+  it("can force a rerun even when the latest revision was already scheduled", async () => {
+    const scheduleRepository = { saveCurrentSchedule: vi.fn().mockResolvedValue(undefined) };
+    const schedulerStateRepository = {
+      tryStartRun: vi.fn().mockResolvedValue({
+        started: true,
+        targetRevision: 4,
+        state: {
+          currentRevision: 4,
+          lastScheduledRevision: 4,
+          lastMutationAt: "2026-04-27T11:50:00.000Z",
+          lastScheduledAt: "2026-04-27T11:55:00.000Z",
+          schedulerStatus: "running",
+          runningRevision: 4,
+        },
+      }),
+      listMutations: vi.fn().mockResolvedValue([]),
+      getState: vi.fn().mockResolvedValue({
+        currentRevision: 4,
+        lastScheduledRevision: 4,
+        lastMutationAt: "2026-04-27T11:50:00.000Z",
+        lastScheduledAt: "2026-04-27T11:55:00.000Z",
+        schedulerStatus: "running",
+        runningRevision: 4,
+      }),
+      insertRun: vi.fn().mockResolvedValue(undefined),
+      completeRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await runSchedulerTickUseCase(
+      {
+        taskRepository: {
+          listSchedulable: vi.fn().mockResolvedValue([
+            createTask({
+              id: "task_1",
+              title: "Write report",
+              remainingMinutes: 60,
+              createdAt: "2026-04-27T00:00:00.000Z",
+            }),
+          ]),
+          save: vi.fn().mockResolvedValue(undefined),
+        },
+        capacityRepository: {
+          listBetween: vi.fn().mockResolvedValue([
+            createDayCapacity({ date: "2026-04-27", availableMinutes: 120 }),
+          ]),
+        },
+        scheduleRepository,
+        schedulerStateRepository,
+        planningIntelligence: {
+          analyzeSchedule: vi.fn().mockResolvedValue({
+            annotations: [],
+            priorityOrder: ["task_1"],
+            rationale: "forced rerun",
+          }),
+        },
+        clock: {
+          now: () => "2026-04-27T12:00:00.000Z",
+          today: () => "2026-04-27",
+        },
+        idGenerator: { next: (prefix: string) => `${prefix}_1` },
+      },
+      { force: true },
+    );
+
+    expect(result.scheduled).toBe(true);
+    expect(schedulerStateRepository.tryStartRun).toHaveBeenCalledWith({
+      now: "2026-04-27T12:00:00.000Z",
+      debounceMilliseconds: 3 * 60_000,
+      force: true,
+    });
+    expect(scheduleRepository.saveCurrentSchedule).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the run instead of falling back when planning intelligence errors", async () => {
+    const scheduleRepository = { saveCurrentSchedule: vi.fn().mockResolvedValue(undefined) };
+    const schedulerStateRepository = {
+      tryStartRun: vi.fn().mockResolvedValue({
+        started: true,
+        targetRevision: 5,
+        state: {
+          currentRevision: 5,
+          lastScheduledRevision: 4,
+          lastMutationAt: "2026-04-27T11:50:00.000Z",
+          lastScheduledAt: "2026-04-27T11:40:00.000Z",
+          schedulerStatus: "running",
+          runningRevision: 5,
+        },
+      }),
+      listMutations: vi.fn().mockResolvedValue([]),
+      getState: vi.fn(),
+      insertRun: vi.fn().mockResolvedValue(undefined),
+      completeRun: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await runSchedulerTickUseCase({
+      taskRepository: {
+        listSchedulable: vi.fn().mockResolvedValue([
+          createTask({
+            id: "task_1",
+            title: "Write report",
+            remainingMinutes: 60,
+            createdAt: "2026-04-27T00:00:00.000Z",
+          }),
+        ]),
+        save: vi.fn().mockResolvedValue(undefined),
+      },
+      capacityRepository: {
+        listBetween: vi.fn().mockResolvedValue([
+          createDayCapacity({ date: "2026-04-27", availableMinutes: 120 }),
+        ]),
+      },
+      scheduleRepository,
+      schedulerStateRepository,
+      planningIntelligence: {
+        analyzeSchedule: vi.fn().mockRejectedValue(new Error("llm unavailable")),
+      },
+      clock: {
+        now: () => "2026-04-27T12:00:00.000Z",
+        today: () => "2026-04-27",
+      },
+      idGenerator: { next: (prefix: string) => `${prefix}_1` },
+    });
+
+    expect(result.scheduled).toBe(false);
+    expect(result.status).toBe("failed");
+    expect(scheduleRepository.saveCurrentSchedule).not.toHaveBeenCalled();
+    expect(schedulerStateRepository.insertRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", errorMessage: "llm unavailable" }),
+    );
+  });
 });
 
 describe("status and logs use cases", () => {
@@ -375,6 +506,9 @@ describe("status and logs use cases", () => {
           schedulerStatus: "pending",
           runningRevision: null,
         }),
+        listRuns: vi.fn().mockResolvedValue([
+          { startedAt: "2026-04-27T11:59:30.000Z" },
+        ]),
       },
       clock: {
         now: () => "2026-04-27T12:00:00.000Z",
@@ -384,6 +518,7 @@ describe("status and logs use cases", () => {
 
     expect(status.hasPendingChanges).toBe(true);
     expect(status.secondsUntilNextRun).toBeGreaterThan(0);
+    expect(status.latestRunAt).toBe("2026-04-27T11:59:30.000Z");
   });
 
   it("returns combined scheduler logs", async () => {

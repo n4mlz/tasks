@@ -34,11 +34,15 @@ export async function runSchedulerTickUseCase(
     clock: Clock;
     idGenerator: IdGenerator;
   },
+  input?: {
+    force?: boolean;
+  },
 ) {
   const now = deps.clock.now();
   const claim = await deps.schedulerStateRepository.tryStartRun({
     now,
     debounceMilliseconds: 3 * 60_000,
+    force: input?.force ?? false,
   });
 
   if (!claim.started) {
@@ -254,6 +258,7 @@ export async function runSchedulerTickUseCase(
       validation,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "unknown error";
     await deps.schedulerStateRepository.insertRun({
       id: runId,
       targetRevision: claim.targetRevision,
@@ -263,7 +268,7 @@ export async function runSchedulerTickUseCase(
       finishedAt: deps.clock.now(),
       rationale: "",
       validation: {},
-      errorMessage: error instanceof Error ? error.message : "unknown error",
+      errorMessage,
     });
     await deps.schedulerStateRepository.completeRun({
       targetRevision: claim.targetRevision,
@@ -272,6 +277,14 @@ export async function runSchedulerTickUseCase(
       scheduled: false,
       processed: true,
     });
-    throw error;
+    return {
+      ran: true,
+      scheduled: false,
+      status: "failed",
+      validation: {
+        isValid: false,
+        errors: [errorMessage],
+      },
+    };
   }
 }

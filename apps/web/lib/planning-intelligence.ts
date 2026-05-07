@@ -6,11 +6,6 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import type { PlanningIntelligence } from "../../../packages/application/src/index";
-import type {
-  TaskCognitiveLoad,
-  TaskEnergy,
-  TaskType,
-} from "../../../packages/domain/src/task";
 
 const taskShapeSchema = z.object({
   taskId: z.string().min(1),
@@ -35,6 +30,8 @@ const plannerOutputSchema = z.object({
   priorityOrder: z.array(z.string().min(1)),
   rationale: z.string().min(1),
 });
+
+type PlannerOutput = z.infer<typeof plannerOutputSchema>;
 
 function resolveWorkspaceRootFromCwd(): string {
   let currentDir = process.cwd();
@@ -87,87 +84,6 @@ function loadWorkspaceEnv(): void {
   }
 }
 
-function inferHeuristically(task: {
-  id: string;
-  title: string;
-  notes: string;
-  remainingMinutes: number;
-}): {
-  taskId: string;
-  taskType: TaskType;
-  cognitiveLoad: TaskCognitiveLoad;
-  energy: TaskEnergy;
-  tags: string[];
-} {
-  const text = `${task.title} ${task.notes}`.toLowerCase();
-  const taskType: TaskType =
-    text.includes("調べ") || text.includes("research")
-      ? "research"
-      : text.includes("書") || text.includes("essay") || text.includes("記事")
-        ? "writing"
-        : text.includes("返信") || text.includes("mail") || text.includes("連絡")
-          ? "communication"
-          : text.includes("暗記") || text.includes("memor")
-            ? "memorization"
-            : text.includes("デザイン")
-              ? "design"
-              : text.includes("実装") || text.includes("code")
-                ? "implementation"
-                : text.includes("申請") || text.includes("事務") || text.includes("admin")
-                  ? "admin"
-                  : "other";
-  const cognitiveLoad: TaskCognitiveLoad =
-    taskType === "research" || taskType === "implementation" || taskType === "writing"
-      ? "high"
-      : taskType === "memorization" || taskType === "design"
-        ? "medium"
-        : "low";
-  const energy: TaskEnergy =
-    task.remainingMinutes >= 180 ? "high" : task.remainingMinutes >= 60 ? "medium" : "low";
-
-  return {
-    taskId: task.id,
-    taskType,
-    cognitiveLoad,
-    energy,
-    tags: [
-      cognitiveLoad === "high" ? "頭使う" : "軽作業寄り",
-      energy === "high" ? "体力使う" : "着手しやすい",
-      `${taskType}系`,
-    ],
-  };
-}
-
-function heuristicPlanner(reason: string): PlanningIntelligence {
-  return {
-    async analyzeSchedule(input) {
-      const annotations = input.tasks.map((task) =>
-        inferHeuristically({
-          id: task.id,
-          title: task.title,
-          notes: task.notes,
-          remainingMinutes: task.remainingMinutes,
-        }),
-      );
-
-      const priorityOrder = [...input.tasks]
-        .sort((left, right) => {
-          if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate);
-          if (left.dueDate) return -1;
-          if (right.dueDate) return 1;
-          return right.remainingMinutes - left.remainingMinutes;
-        })
-        .map((task) => task.id);
-
-      return {
-        annotations,
-        priorityOrder,
-        rationale: reason,
-      };
-    },
-  };
-}
-
 function resolveModel() {
   loadWorkspaceEnv();
 
@@ -178,7 +94,7 @@ function resolveModel() {
     return {
       model: null,
       fallbackReason:
-        "TASK_PLATFORM_LLM_MODEL が未設定のため、タイトルと必要時間から簡易推定しました。",
+        "TASK_PLATFORM_LLM_MODEL が未設定です。",
     };
   }
   if (provider === "openai") {
@@ -193,7 +109,7 @@ function resolveModel() {
     return {
       model: null,
       fallbackReason:
-        "TASK_PLATFORM_LLM_BASE_URL が未設定のため、タイトルと必要時間から簡易推定しました。",
+        "TASK_PLATFORM_LLM_BASE_URL が未設定です。",
     };
   }
 
@@ -211,6 +127,11 @@ function resolveModel() {
   };
 }
 
+function supportsStructuredOutputs(): boolean {
+  loadWorkspaceEnv();
+  return process.env.TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS === "true";
+}
+
 function resolveTimeoutMs(): number {
   loadWorkspaceEnv();
   const raw = Number(process.env.TASK_PLATFORM_LLM_TIMEOUT_MS ?? "20000");
@@ -221,61 +142,128 @@ export function createPlanningIntelligence(): PlanningIntelligence {
   const { model, fallbackReason } = resolveModel();
   const timeoutMs = resolveTimeoutMs();
   if (!model) {
-    return heuristicPlanner(
-      fallbackReason ?? "ローカルの互換 LLM が未設定のため、簡易推定でスケジューリングしました。",
-    );
+    return {
+      async analyzeSchedule() {
+        throw new Error(fallbackReason ?? "ローカル LLM が未設定です。");
+      },
+    };
   }
+  const resolvedModel = model;
 
   return {
     async analyzeSchedule(input) {
-      try {
+      const system = [
+        "あなたは個人の task planning assistant です。",
+        "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
+        "priorityOrder は scheduling の優先順です。締切、残り時間、負荷の偏りを見て並べてください。",
+        "高負荷 task を同じ日に詰め込みすぎない意図で優先順を作ってください。",
+        "tags は人が読める日本語にしてください。",
+      ].join("\n");
+      const payload = {
+        today: input.today,
+        tasks: input.tasks.map((task) => ({
+          id: task.id,
+          title: task.title,
+          notes: task.notes,
+          dueDate: task.dueDate,
+          remainingHours: Number((task.remainingMinutes / 60).toFixed(2)),
+          currentTaskType: task.taskType,
+          currentCognitiveLoad: task.cognitiveLoad,
+          currentEnergy: task.energy,
+          currentTags: task.tags,
+        })),
+        capacities: input.capacities.map((capacity) => ({
+          date: capacity.date,
+          hours: Number((capacity.availableMinutes / 60).toFixed(2)),
+        })),
+        recentMutations: input.recentMutations,
+      };
+
+      const plainJsonPrompt = [
+        "必ず JSON のみを返してください。markdown や説明文は不要です。",
+        "JSON schema:",
+        JSON.stringify({
+          annotations: [
+            {
+              taskId: "string",
+              taskType: "implementation|writing|research|communication|memorization|admin|design|other|unknown",
+              cognitiveLoad: "low|medium|high|unknown",
+              energy: "low|medium|high|unknown",
+              tags: ["string"],
+            },
+          ],
+          priorityOrder: ["taskId"],
+          rationale: "string",
+        }),
+        "Input JSON:",
+        JSON.stringify(payload, null, 2),
+      ].join("\n");
+
+      async function runStructured(): Promise<PlannerOutput> {
         const { output } = await generateText({
-          model,
+          model: resolvedModel,
           abortSignal: AbortSignal.timeout(timeoutMs),
           output: Output.object({ schema: plannerOutputSchema }),
-          system: [
-            "あなたは個人の task planning assistant です。",
-            "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
-            "priorityOrder は scheduling の優先順です。締切、残り時間、負荷の偏りを見て並べてください。",
-            "高負荷 task を同じ日に詰め込みすぎない意図で優先順を作ってください。",
-            "tags は人が読める日本語にしてください。",
-          ].join("\n"),
-          prompt: JSON.stringify(
-            {
-              today: input.today,
-              tasks: input.tasks.map((task) => ({
-                id: task.id,
-                title: task.title,
-                notes: task.notes,
-                dueDate: task.dueDate,
-                remainingHours: Number((task.remainingMinutes / 60).toFixed(2)),
-                currentTaskType: task.taskType,
-                currentCognitiveLoad: task.cognitiveLoad,
-                currentEnergy: task.energy,
-                currentTags: task.tags,
-              })),
-              capacities: input.capacities.map((capacity) => ({
-                date: capacity.date,
-                hours: Number((capacity.availableMinutes / 60).toFixed(2)),
-              })),
-              recentMutations: input.recentMutations,
-            },
-            null,
-            2,
-          ),
+          system,
+          prompt: JSON.stringify(payload, null, 2),
         });
 
+        return output;
+      }
+
+      async function runPlainJson(): Promise<PlannerOutput> {
+        const { text } = await generateText({
+          model: resolvedModel,
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          system,
+          prompt: plainJsonPrompt,
+        });
+
+        const parsed = plannerOutputSchema.safeParse(JSON.parse(text));
+        if (!parsed.success) {
+          throw new Error(`LLM JSON の検証に失敗しました: ${parsed.error.message}`);
+        }
+        return parsed.data;
+      }
+
+      try {
+        const output = supportsStructuredOutputs()
+          ? await runStructured()
+          : await runPlainJson();
         return {
           annotations: output.annotations,
           priorityOrder: output.priorityOrder,
           rationale: output.rationale,
         };
       } catch (error) {
-        return heuristicPlanner(
-          `LLM 推論に失敗したため簡易推定にフォールバックしました: ${
-            error instanceof Error ? error.message : "unknown error"
-          }`,
-        ).analyzeSchedule(input);
+        const message =
+          error instanceof Error ? error.message : "LLM 推論に失敗しました。";
+        const shouldRetryPlainJson =
+          supportsStructuredOutputs() &&
+          /response_format|json_object|structured output|unavailable/i.test(message);
+
+        if (shouldRetryPlainJson) {
+          try {
+            const output = await runPlainJson();
+            return {
+              annotations: output.annotations,
+              priorityOrder: output.priorityOrder,
+              rationale: output.rationale,
+            };
+          } catch (retryError) {
+            throw new Error(
+              retryError instanceof Error
+                ? `LLM 推論に失敗しました: ${retryError.message}`
+                : "LLM 推論に失敗しました。",
+            );
+          }
+        }
+
+        throw new Error(
+          error instanceof Error
+            ? `LLM 推論に失敗しました: ${message}`
+            : "LLM 推論に失敗しました。",
+        );
       }
     },
   };

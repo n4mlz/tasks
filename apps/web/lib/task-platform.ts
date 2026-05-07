@@ -99,10 +99,29 @@ type TaskPlatform = {
   getSchedulerStatus: () => Promise<unknown>;
   postponeScheduler: (input: { delayMilliseconds: number }) => Promise<void>;
   listSchedulerLogs: () => Promise<unknown>;
-  runSchedulerTick: () => Promise<unknown>;
+  runSchedulerTick: (input?: { force?: boolean }) => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
+const BACKGROUND_SCHEDULER_KEY = "__taskPlatformBackgroundScheduler";
+
+export function startBackgroundScheduler(taskPlatform: Pick<TaskPlatform, "runSchedulerTick">, intervalMs = 30_000) {
+  const registry = globalThis as typeof globalThis & {
+    [BACKGROUND_SCHEDULER_KEY]?: ReturnType<typeof setInterval>;
+  };
+
+  if (registry[BACKGROUND_SCHEDULER_KEY]) {
+    return registry[BACKGROUND_SCHEDULER_KEY];
+  }
+
+  const timer = setInterval(() => {
+    void taskPlatform.runSchedulerTick().catch(() => {});
+  }, intervalMs);
+  timer.unref?.();
+
+  registry[BACKGROUND_SCHEDULER_KEY] = timer;
+  return timer;
+}
 
 function resolveDatabasePath(): string {
   const workspaceRoot = resolveWorkspaceRoot();
@@ -278,7 +297,7 @@ function getTaskPlatform(): TaskPlatform {
         schedulerStateRepository,
       });
     },
-    async runSchedulerTick() {
+    async runSchedulerTick(input) {
       return runSchedulerTickUseCase({
         taskRepository,
         capacityRepository,
@@ -287,9 +306,13 @@ function getTaskPlatform(): TaskPlatform {
         planningIntelligence,
         clock,
         idGenerator,
-      });
+      }, input);
     },
   };
+
+  if (process.env.NODE_ENV !== "test") {
+    startBackgroundScheduler(taskPlatformInstance);
+  }
 
   return taskPlatformInstance;
 }
