@@ -140,6 +140,45 @@ export interface WorkLogRepository {
   >;
 }
 
+export type DashboardWeeklyBucket = {
+  weekStart: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+  completedTaskCount: number;
+  completionRate: number;
+};
+
+export type DashboardTaskBucket = {
+  weekStart: string;
+  plannedMinutes: number;
+  actualMinutes: number;
+};
+
+export type DashboardTaskHeader = {
+  taskId: string;
+  title: string;
+  totalEstimatedMinutes: number;
+  remainingMinutes: number;
+  loggedMinutes: number;
+  progressRate: number;
+  dueDate: string | null;
+};
+
+export interface DashboardRepository {
+  getWeeklySummary(input: {
+    endDate: string;
+    weeks: number;
+  }): Promise<DashboardWeeklyBucket[]>;
+  getTaskTimeline(input: {
+    taskId: string;
+    endDate: string;
+    weeks: number;
+  }): Promise<{
+    header: DashboardTaskHeader;
+    buckets: DashboardTaskBucket[];
+  }>;
+}
+
 export interface IdGenerator {
   next(prefix: string): string;
 }

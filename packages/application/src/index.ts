@@ -12,3 +12,5 @@ export { getSchedulerStatusUseCase } from "./use-cases/get-scheduler-status";
 export { listSchedulerLogsUseCase } from "./use-cases/list-scheduler-logs";
 export { postponeSchedulerUseCase } from "./use-cases/postpone-scheduler";
 export { runSchedulerTickUseCase } from "./use-cases/run-scheduler-tick";
+export { getDashboardWeeklySummaryUseCase } from "./use-cases/get-dashboard-weekly-summary";
+export { getDashboardTaskTimelineUseCase } from "./use-cases/get-dashboard-task-timeline";
