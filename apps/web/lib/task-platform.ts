@@ -3,6 +3,8 @@ import path from "node:path";
 import {
   createTaskUseCase,
   deleteTaskUseCase,
+  getDashboardTaskTimelineUseCase,
+  getDashboardWeeklySummaryUseCase,
   getMetricsUseCase,
   getPlanningHealthUseCase,
   getSchedulerStatusUseCase,
@@ -18,6 +20,7 @@ import {
   migrate,
   resolveWorkspaceRoot,
   SqliteCapacityRepository,
+  SqliteDashboardRepository,
   SqliteMetricsRepository,
   SqliteSchedulerStateRepository,
   SqliteScheduleRepository,
@@ -90,6 +93,8 @@ type TaskPlatform = {
   getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
   getMetrics: (dateFrom?: string, dateTo?: string) => Promise<unknown>;
+  getDashboardWeeklySummary: () => Promise<unknown>;
+  getDashboardTaskTimeline: (taskId: string) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
   getWorkLogs: (input: {
     taskIds?: string[];
@@ -150,6 +155,7 @@ function getTaskPlatform(): TaskPlatform {
   const scheduleRepository = new SqliteScheduleRepository(db);
   const workLogRepository = new SqliteWorkLogRepository(db);
   const metricsRepository = new SqliteMetricsRepository(db);
+  const dashboardRepository = new SqliteDashboardRepository(db);
   const schedulerStateRepository = new SqliteSchedulerStateRepository(db);
   const planningIntelligence = createPlanningIntelligence();
 
@@ -260,6 +266,19 @@ function getTaskPlatform(): TaskPlatform {
         },
         { dateFrom: resolvedDateFrom, dateTo: resolvedDateTo },
       );
+    },
+    async getDashboardWeeklySummary() {
+      return getDashboardWeeklySummaryUseCase({
+        dashboardRepository,
+        today: clock.today(),
+      });
+    },
+    async getDashboardTaskTimeline(taskId: string) {
+      return getDashboardTaskTimelineUseCase({
+        dashboardRepository,
+        taskId,
+        today: clock.today(),
+      });
     },
     async getPlanningHealth() {
       return getPlanningHealthUseCase(

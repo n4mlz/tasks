@@ -32,3 +32,12 @@ describe("startBackgroundScheduler", () => {
     expect(runSchedulerTick).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("taskPlatform service shape", () => {
+  it("exposes dashboard summary readers", async () => {
+    const { taskPlatform } = await import("../lib/task-platform");
+
+    expect(typeof taskPlatform.getDashboardWeeklySummary).toBe("function");
+    expect(typeof taskPlatform.getDashboardTaskTimeline).toBe("function");
+  });
+});

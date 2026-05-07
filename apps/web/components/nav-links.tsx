@@ -8,6 +8,7 @@ const navigationItems = [
   { href: "/", label: "今日" },
   { href: "/inbox", label: "Inbox" },
   { href: "/week", label: "計画" },
+  { href: "/dashboard", label: "ダッシュボード" },
   { href: "/logs", label: "ログ" },
 ];
 
