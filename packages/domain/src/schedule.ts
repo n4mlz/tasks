@@ -17,6 +17,9 @@ export interface DomainSchedulePlan {
     riskFlags: string[];
     unscheduledTaskIds: string[];
     capacityPressureByDate: Record<string, number>;
+    bufferUsageByDate: Record<string, number>;
+    datesUsingReserve: string[];
+    insufficientEvenWithReserve: boolean;
   };
 }
 export interface ScheduleValidationResult {
@@ -26,6 +29,14 @@ export interface ScheduleValidationResult {
 
 export function usableMinutesForDay(capacity: DayCapacity): number {
   return Math.max(capacity.availableMinutes - capacity.bufferMinutes, 0);
+}
+
+function baseMinutesForDay(capacity: DayCapacity): number {
+  return Math.floor(usableMinutesForDay(capacity) * 0.8);
+}
+
+function reserveMinutesForDay(capacity: DayCapacity): number {
+  return usableMinutesForDay(capacity) - baseMinutesForDay(capacity);
 }
 
 function latestSchedulableDate(task: Task, today: string): string | null {
@@ -107,11 +118,15 @@ export function buildSchedulePlan(input: {
   const dayBudgets = new Map(
     input.capacities.map((capacity) => [capacity.date, usableMinutesForDay(capacity)]),
   );
+  const baseBudgets = new Map(
+    input.capacities.map((capacity) => [capacity.date, baseMinutesForDay(capacity)]),
+  );
   const dayLoadScores = new Map(input.capacities.map((capacity) => [capacity.date, 0]));
 
   const slices: ScheduledSlice[] = [];
   const riskFlags: string[] = [];
   const unscheduledTaskIds: string[] = [];
+  const bufferUsageByDate = new Map(input.capacities.map((capacity) => [capacity.date, 0]));
 
   for (const task of sortedTasks) {
     let remaining = task.remainingMinutes;
@@ -143,19 +158,29 @@ export function buildSchedulePlan(input: {
       .filter((date) => (latestDate ? date <= latestDate : true));
 
     for (const date of candidateDays) {
-      const budget = dayBudgets.get(date) ?? 0;
-      if (budget <= 0 || remaining <= 0) {
+      if (remaining <= 0) {
         continue;
       }
 
-      const plannedMinutes = Math.min(budget, remaining);
+      const totalBudget = dayBudgets.get(date) ?? 0;
+      const baseBudget = baseBudgets.get(date) ?? 0;
+      if (totalBudget <= 0) {
+        continue;
+      }
+
+      const plannedMinutes = Math.min(totalBudget, remaining);
       slices.push({
         taskId: task.id,
         date,
         plannedMinutes,
         kind: "focus",
       });
-      dayBudgets.set(date, budget - plannedMinutes);
+      dayBudgets.set(date, totalBudget - plannedMinutes);
+      const reserveUsage = Math.max(plannedMinutes - baseBudget, 0);
+      if (reserveUsage > 0) {
+        bufferUsageByDate.set(date, (bufferUsageByDate.get(date) ?? 0) + reserveUsage);
+      }
+      baseBudgets.set(date, Math.max(baseBudget - plannedMinutes, 0));
       dayLoadScores.set(
         date,
         (dayLoadScores.get(date) ?? 0) + Math.max(1, Math.ceil(plannedMinutes / 60)) * taskBurden,
@@ -179,6 +204,12 @@ export function buildSchedulePlan(input: {
       return [capacity.date, Math.max(original - remaining, 0)];
     }),
   );
+  const bufferUsageByDateRecord = Object.fromEntries(
+    input.capacities.map((capacity) => [capacity.date, bufferUsageByDate.get(capacity.date) ?? 0]),
+  );
+  const datesUsingReserve = Object.entries(bufferUsageByDateRecord)
+    .filter(([, value]) => value > 0)
+    .map(([date]) => date);
 
   return {
     horizonStart: input.capacities[0]?.date ?? input.today,
@@ -189,6 +220,9 @@ export function buildSchedulePlan(input: {
       riskFlags,
       unscheduledTaskIds,
       capacityPressureByDate,
+      bufferUsageByDate: bufferUsageByDateRecord,
+      datesUsingReserve,
+      insufficientEvenWithReserve: unscheduledTaskIds.length > 0,
     },
   };
 }
@@ -202,6 +236,9 @@ export function validateSchedulePlan(input: {
   const taskById = new Map(input.tasks.map((task) => [task.id, task]));
   const capacityByDate = new Map(
     input.capacities.map((capacity) => [capacity.date, usableMinutesForDay(capacity)]),
+  );
+  const baseCapacityByDate = new Map(
+    input.capacities.map((capacity) => [capacity.date, baseMinutesForDay(capacity)]),
   );
   const taskTotals = new Map<string, number>();
   const dayTotals = new Map<string, number>();
@@ -234,6 +271,11 @@ export function validateSchedulePlan(input: {
     const usable = capacityByDate.get(date) ?? 0;
     if (planned > usable) {
       errors.push(`over_capacity:${date}`);
+    }
+    const baseCapacity = baseCapacityByDate.get(date) ?? 0;
+    const reserveMarked = input.plan.summary.datesUsingReserve.includes(date);
+    if (planned > baseCapacity && !reserveMarked) {
+      errors.push(`missing_reserve_marker:${date}`);
     }
   }
 

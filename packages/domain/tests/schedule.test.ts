@@ -204,4 +204,83 @@ describe("schedule plan generation", () => {
     expect(validation.isValid).toBe(true);
     expect(validation.errors).toEqual([]);
   });
+
+  it("keeps work inside the 80% base budget when possible", () => {
+    const task = createTask({
+      id: "task_base_budget",
+      title: "Write report",
+      remainingMinutes: 360,
+      createdAt: "2026-05-08T00:00:00.000Z",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBe(0);
+    expect(plan.summary.datesUsingReserve).toEqual([]);
+    expect(plan.summary.insufficientEvenWithReserve).toBe(false);
+  });
+
+  it("uses reserve only when base budget is insufficient", () => {
+    const task = createTask({
+      id: "task_reserve_budget",
+      title: "Finish slide deck",
+      remainingMinutes: 420,
+      createdAt: "2026-05-08T00:00:00.000Z",
+      dueDate: "2026-05-09",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBe(36);
+    expect(plan.summary.datesUsingReserve).toContain("2026-05-08");
+  });
+
+  it("marks reserve usage as valid rather than structurally invalid", () => {
+    const task = createTask({
+      id: "task_validation_reserve",
+      title: "Finish essay",
+      remainingMinutes: 420,
+      createdAt: "2026-05-08T00:00:00.000Z",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+    const validation = validateSchedulePlan({
+      plan,
+      tasks: [task],
+      capacities,
+    });
+
+    expect(validation.isValid).toBe(true);
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBeGreaterThan(0);
+  });
 });
