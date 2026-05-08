@@ -24,6 +24,8 @@ This revision reflects the current product direction:
 - LLM inference is used for task-shape analysis and scheduling guidance, but final schedules are validated deterministically
 - the Web UI must support routine use without requiring MCP
 - a dedicated dashboard must expose weekly and per-task progress trends through charts
+- work logging must also support tasks that were not assigned to today
+- scheduling must preserve a reserve buffer by default and only consume it when necessary
 
 ## Goals
 
@@ -231,6 +233,12 @@ Fields:
 
 This is the main execution feedback loop for rescheduling and metrics.
 
+Design notes:
+
+- a work log may be recorded for any active task, even if that task was not assigned to today's slices
+- when work is logged and `remainingMinutesAfter > 0`, the task naturally carries over into the next scheduling run
+- carry-over is not modeled as a special state; it is just an active task with remaining work
+
 ### DayCapacity
 
 Fields:
@@ -243,6 +251,7 @@ Design notes:
 - `availableMinutes` means the maximum amount of time the user is willing to allocate to tasks that day
 - buffer is not directly edited by the user
 - any internal buffer or caution logic belongs to scheduling heuristics, not to the input surface
+- the scheduling engine should treat roughly 20% of the day as reserve by default unless reserve consumption becomes necessary
 
 ### CurrentSchedule
 
@@ -343,6 +352,32 @@ This ensures that leaving the page, reloading, or editing during a run does not 
 - missing capacity also contributes to planning-health warnings
 - if total capacity is clearly insufficient, the scheduler may fail fast and ask the user to revisit the plan
 
+### Reserve Buffer Handling
+
+The scheduler must treat each day in two phases:
+
+- `baseCapacityMinutes = floor(availableMinutes * 0.8)`
+- `reserveCapacityMinutes = availableMinutes - baseCapacityMinutes`
+
+Scheduling policy:
+
+1. first, try to place work inside `baseCapacityMinutes`
+2. only if that fails to satisfy task needs and deadlines, allow the scheduler to consume `reserveCapacityMinutes`
+3. if reserve is consumed and the schedule is still insufficient, surface explicit risk / shortage state
+
+This makes reserve usage a controlled exception rather than the default.
+
+### Carry-Over Handling
+
+Unfinished work must carry over through ordinary rescheduling.
+
+Rules:
+
+- when a task still has `remainingMinutes > 0` after a work log, it remains active
+- the next deferred scheduling run must redistribute that remaining work together with all other active tasks
+- the system must not simply copy yesterday's slice to today
+- carry-over should be recomputed from all active tasks, all capacities, and reserve-buffer constraints
+
 ### LLM-Assisted Ordering
 
 The app sends the LLM:
@@ -373,6 +408,8 @@ Validation must ensure at minimum:
 - no slice has non-positive minutes
 - no slice is placed after the latest schedulable date for its task
 - no day exceeds its capacity
+- if a day consumes reserve, that consumption is reflected in schedule summary
+- if a day does not need reserve, it should remain inside `baseCapacityMinutes`
 
 Unscheduled work is not a structural validation failure by itself.
 
@@ -381,6 +418,12 @@ Instead, unscheduled or under-scheduled work must surface through:
 - human-readable warnings
 - risk flags
 - shortage metrics
+
+The validator should therefore distinguish between:
+
+- invalid schedules
+- valid schedules that required reserve use
+- valid schedules that still leave some work unscheduled
 
 ### Failure Policy
 
@@ -447,6 +490,7 @@ Must support:
 - `spent time`
 - editable `remaining time`
 - complete-task toggle
+- a separate `other task` logging entry point for active tasks that were not assigned to today
 - compact planning-health warning
 - compact scheduler status
 
@@ -490,6 +534,12 @@ Must support:
   - assigned schedule preview
 
 The calendar is an input surface, not only a display.
+
+It should also expose reserve usage lightly:
+
+- show when a day has consumed reserve
+- avoid verbose explanation boxes
+- keep reserve usage understandable without turning the screen into a diagnostics view
 
 ### ダッシュボード
 
@@ -601,6 +651,14 @@ It should support all meaningful Web-side operations that matter for conversatio
 - delay scheduler
 - trigger immediate scheduler run
 
+Existing work-log tools must continue to support arbitrary tasks, not only tasks assigned to the current day.
+
+Where helpful, schedule and planning-health responses should expose reserve-related summary fields such as:
+
+- `bufferUsageByDate`
+- `datesUsingReserve`
+- `insufficientEvenWithReserve`
+
 This allows agents to handle requests such as:
 
 - "今日中に返信が必要だから task を追加して"
@@ -665,12 +723,15 @@ The design is considered satisfied when:
 
 - users can enter and edit task and capacity data through the Web UI
 - users can log work from Today
+- users can also log work for a non-today-assigned active task from Today
 - Today shows only current-day execution items
 - scheduling runs asynchronously after edits settle
 - users can delay or immediately trigger scheduling from the UI
 - scheduling remains safe if edits occur during a run
 - failed inference does not replace the last valid schedule
 - schedule adoption is gated by deterministic validation
+- unfinished work is carried into the next schedule run through remaining minutes
+- the scheduler preserves a daily reserve by default and only consumes it when necessary
 - planning-health warnings are accessible from both Web UI and MCP
 - the app exposes a dedicated ダッシュボード route
 - the dashboard has `週次` and `タスク別` tabs
