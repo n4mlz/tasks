@@ -1,5 +1,6 @@
 import React from "react";
 import { PlanningAlert } from "../components/planning-alert";
+import { QuickWorkLog } from "../components/quick-work-log";
 import { StatusBadge } from "../components/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { WorkLogDialog } from "../components/work-log-dialog";
@@ -18,6 +19,11 @@ export default async function HomePage() {
   const today = new Date().toISOString().slice(0, 10);
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeScheduleId: string | null;
+    summary?: {
+      bufferUsageByDate?: Record<string, number>;
+      datesUsingReserve?: string[];
+      insufficientEvenWithReserve?: boolean;
+    } | null;
     slices: Array<{
       task_id?: string;
       date?: string;
@@ -32,7 +38,7 @@ export default async function HomePage() {
     shortfallMinutes?: number;
     horizonEnd?: string;
   };
-  const tasks = (await taskPlatform.listTasks()) as Array<{
+  const tasks = (await taskPlatform.listTasks({ status: "active" })) as Array<{
     id: string;
     title: string;
     taskType?: string;
@@ -40,6 +46,7 @@ export default async function HomePage() {
     energy?: string;
     tags?: string[];
     remainingMinutes?: number;
+    status?: string;
   }>;
   const metrics = (await taskPlatform.getMetrics(today, today)) as {
     plannedMinutes: number;
@@ -48,6 +55,11 @@ export default async function HomePage() {
 
   const taskTitles = new Map(tasks.map((task) => [task.id, task]));
   const todaysSlices = schedule.slices.filter((slice) => slice.date === today);
+  const todaysTaskIds = new Set(todaysSlices.map((slice) => slice.task_id).filter(Boolean));
+  const otherActiveTasks = tasks.filter(
+    (task) => task.id && !todaysTaskIds.has(task.id),
+  );
+  const todayReserveMinutes = schedule.summary?.bufferUsageByDate?.[today] ?? 0;
 
   return (
     <section className="grid gap-4">
@@ -58,6 +70,11 @@ export default async function HomePage() {
           <StatusBadge tone="secondary">
             {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
           </StatusBadge>
+          <StatusBadge tone={todayReserveMinutes > 0 ? "warning" : "outline"}>
+            {todayReserveMinutes > 0
+              ? `バッファ使用 ${formatHoursFromMinutes(todayReserveMinutes)}`
+              : "通常予算内"}
+          </StatusBadge>
           <StatusBadge tone={schedule.activeScheduleId ? "success" : "outline"}>
             {schedule.activeScheduleId ? "計画あり" : "まだ未計画"}
           </StatusBadge>
@@ -65,6 +82,19 @@ export default async function HomePage() {
       </div>
 
       <PlanningAlert compact initialHealth={planningHealth} />
+
+      {otherActiveTasks.length > 0 ? (
+        <div className="flex justify-end">
+          <QuickWorkLog
+            date={today}
+            tasks={otherActiveTasks.map((task) => ({
+              id: task.id,
+              title: task.title,
+              remainingMinutes: task.remainingMinutes ?? 0,
+            }))}
+          />
+        </div>
+      ) : null}
 
       {todaysSlices.length === 0 ? (
         <Card className="border-dashed border-slate-300/90 bg-white/90">

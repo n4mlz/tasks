@@ -6,12 +6,17 @@ import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Modal } from "./ui/modal";
+import { Select } from "./ui/select";
 
 type WorkLogDialogProps = {
   taskId: string;
   title: string;
   date: string;
   defaultRemainingHours: number;
+  triggerLabel?: string;
+  selectableTasks?: Array<{ id: string; title: string }>;
+  selectedTaskId?: string;
+  onSelectedTaskIdChange?: (taskId: string) => void;
 };
 
 export function WorkLogDialog({
@@ -19,8 +24,13 @@ export function WorkLogDialog({
   title,
   date,
   defaultRemainingHours,
+  triggerLabel = "作業記録",
+  selectableTasks,
+  selectedTaskId,
+  onSelectedTaskIdChange,
 }: WorkLogDialogProps) {
   const router = useRouter();
+  const [open, setOpen] = React.useState(false);
   const [spentHours, setSpentHours] = React.useState("");
   const [remainingHours, setRemainingHours] = React.useState(defaultRemainingHours.toString());
   const [markDone, setMarkDone] = React.useState(false);
@@ -42,11 +52,22 @@ export function WorkLogDialog({
     setRemainingHours(Math.max(0, defaultRemainingHours - spent).toString());
   }, [defaultRemainingHours, markDone, spentHours]);
 
+  React.useEffect(() => {
+    if (!open) {
+      setSpentHours("");
+      setNote("");
+      setMarkDone(false);
+      setRemainingHours(defaultRemainingHours.toString());
+    }
+  }, [defaultRemainingHours, open]);
+
   return (
     <Modal
       description="進めた時間と残り見積もりを更新します。"
+      onOpenChange={setOpen}
+      open={open}
       title={title}
-      trigger={<Button type="button">作業記録</Button>}
+      trigger={<Button type="button">{triggerLabel}</Button>}
     >
       <form
         className="grid gap-4"
@@ -69,12 +90,29 @@ export function WorkLogDialog({
               throw new Error("failed to save work log");
             }
             window.dispatchEvent(new Event("task-platform:planning-changed"));
+            setOpen(false);
             router.refresh();
           } finally {
             setSaving(false);
           }
         }}
       >
+        {selectableTasks?.length ? (
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            task
+            <Select
+              aria-label="task"
+              onChange={(event) => onSelectedTaskIdChange?.(event.target.value)}
+              value={selectedTaskId}
+            >
+              {selectableTasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </Select>
+          </label>
+        ) : null}
         <label className="grid gap-2 text-sm font-medium text-slate-700">
           進めた時間 (時間)
           <Input

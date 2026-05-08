@@ -103,6 +103,11 @@ export default async function WeekPage(props: {
   };
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeScheduleId: string | null;
+    summary?: {
+      bufferUsageByDate?: Record<string, number>;
+      datesUsingReserve?: string[];
+      insufficientEvenWithReserve?: boolean;
+    } | null;
     slices: Array<{
       task_id?: string;
       date?: string;
@@ -137,6 +142,9 @@ export default async function WeekPage(props: {
   }
 
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const monthReserveMinutes = Object.entries(schedule.summary?.bufferUsageByDate ?? {})
+    .filter(([date]) => date >= monthStart && date <= monthEnd)
+    .reduce((sum, [, minutes]) => sum + Number(minutes), 0);
   const spentMinutesByTask = new Map<string, number>();
   for (const workLog of workLogs) {
     spentMinutesByTask.set(
@@ -205,6 +213,11 @@ export default async function WeekPage(props: {
           </StatusBadge>
           <StatusBadge tone={metrics.atRiskTaskCount > 0 ? "warning" : "outline"}>
             {`注意 ${metrics.atRiskTaskCount}`}
+          </StatusBadge>
+          <StatusBadge tone={monthReserveMinutes > 0 ? "warning" : "outline"}>
+            {monthReserveMinutes > 0
+              ? `バッファ使用 ${formatHoursFromMinutes(monthReserveMinutes)}`
+              : "通常予算内"}
           </StatusBadge>
         </div>
       </div>

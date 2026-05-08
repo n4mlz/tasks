@@ -106,6 +106,11 @@ describe("Web UI", () => {
     ]);
     taskPlatformMock.getCurrentSchedule.mockResolvedValue({
       activeScheduleId: "schedule_1",
+      summary: {
+        bufferUsageByDate: {},
+        datesUsingReserve: [],
+        insufficientEvenWithReserve: false,
+      },
       slices: [
         { task_id: "task_today", date: "2026-04-28", planned_minutes: 60, kind: "focus" },
         { task_id: "task_today", date: "2026-04-30", planned_minutes: 30, kind: "focus" },
@@ -270,6 +275,33 @@ describe("Web UI", () => {
     render(await HomePage());
 
     expect(screen.getByRole("button", { name: "作業記録" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "他の task を記録" })).toBeInTheDocument();
+  });
+
+  it("shows a task selector when logging work for a non-assigned task", async () => {
+    render(await HomePage());
+
+    fireEvent.click(screen.getByRole("button", { name: "他の task を記録" }));
+
+    expect(screen.getByRole("combobox", { name: "task" })).toBeInTheDocument();
+  });
+
+  it("shows reserve usage on Today when today's plan consumed reserve", async () => {
+    taskPlatformMock.getCurrentSchedule.mockResolvedValue({
+      activeScheduleId: "schedule_1",
+      summary: {
+        bufferUsageByDate: { "2026-04-28": 36 },
+        datesUsingReserve: ["2026-04-28"],
+        insufficientEvenWithReserve: false,
+      },
+      slices: [
+        { task_id: "task_today", date: "2026-04-28", planned_minutes: 420, kind: "focus" },
+      ],
+    });
+
+    render(await HomePage());
+
+    expect(screen.getByText(/バッファ使用/)).toBeInTheDocument();
   });
 
   it("renders a planning-health warning on the Today page", async () => {
@@ -339,6 +371,28 @@ describe("Web UI", () => {
     expect(screen.getByText("2.5 時間")).toBeInTheDocument();
     expect(screen.getByText("1.5 時間")).toBeInTheDocument();
     expect(screen.getByText("40%")).toBeInTheDocument();
+  });
+
+  it("shows reserve usage on the Week page when the current schedule consumed reserve", async () => {
+    taskPlatformMock.getCurrentSchedule.mockResolvedValue({
+      activeScheduleId: "schedule_1",
+      summary: {
+        bufferUsageByDate: { "2026-04-28": 36 },
+        datesUsingReserve: ["2026-04-28"],
+        insufficientEvenWithReserve: false,
+      },
+      slices: [
+        { task_id: "task_today", date: "2026-04-28", planned_minutes: 420, kind: "focus" },
+      ],
+    });
+
+    const WeekPageWithProps = WeekPage as unknown as (props: {
+      searchParams?: Promise<Record<string, string>>;
+    }) => Promise<React.JSX.Element>;
+
+    render(await WeekPageWithProps({ searchParams: Promise.resolve({ referenceDate: "2026-04-28" }) }));
+
+    expect(screen.getByText(/バッファ使用/)).toBeInTheDocument();
   });
 
   it("renders delete actions for inbox tasks", async () => {
