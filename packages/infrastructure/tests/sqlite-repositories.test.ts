@@ -86,6 +86,11 @@ describe("SQLite task repository", () => {
         capacityPressureByDate: {
           "2026-04-27": 120,
         },
+        bufferUsageByDate: {
+          "2026-04-27": 24,
+        },
+        datesUsingReserve: ["2026-04-27"],
+        insufficientEvenWithReserve: false,
       },
     });
 
@@ -97,6 +102,11 @@ describe("SQLite task repository", () => {
       capacityPressureByDate: {
         "2026-04-27": 120,
       },
+      bufferUsageByDate: {
+        "2026-04-27": 24,
+      },
+      datesUsingReserve: ["2026-04-27"],
+      insufficientEvenWithReserve: false,
     });
   });
 

@@ -286,6 +286,15 @@ describe("runSchedulerTickUseCase", () => {
     expect(result.ran).toBe(true);
     expect(result.scheduled).toBe(true);
     expect(scheduleRepository.saveCurrentSchedule).toHaveBeenCalledTimes(1);
+    expect(scheduleRepository.saveCurrentSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: expect.objectContaining({
+          bufferUsageByDate: expect.any(Object),
+          datesUsingReserve: expect.any(Array),
+          insufficientEvenWithReserve: expect.any(Boolean),
+        }),
+      }),
+    );
     expect(schedulerStateRepository.insertRun).toHaveBeenCalledWith(
       expect.objectContaining({ status: "scheduled" }),
     );

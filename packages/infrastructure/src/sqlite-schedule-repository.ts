@@ -15,6 +15,9 @@ export class SqliteScheduleRepository {
       riskFlags: string[];
       unscheduledTaskIds: string[];
       capacityPressureByDate: Record<string, number>;
+      bufferUsageByDate: Record<string, number>;
+      datesUsingReserve: string[];
+      insufficientEvenWithReserve: boolean;
     };
   }): Promise<void> {
     const summaryJson = JSON.stringify(schedule.summary);
