@@ -69,8 +69,14 @@ export function DashboardWeeklyChart({
           実績
         </span>
       </div>
-      <div className="h-72">
-        {isTest ? chart : <ResponsiveContainer width="100%" height="100%">{chart}</ResponsiveContainer>}
+      <div data-testid="dashboard-weekly-chart-frame" className="h-72 min-h-72 min-w-0">
+        {isTest ? (
+          chart
+        ) : (
+          <ResponsiveContainer height="100%" minWidth={0} minHeight={288} width="100%">
+            {chart}
+          </ResponsiveContainer>
+        )}
       </div>
       {chartData.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">まだ週次データはありません。</p>

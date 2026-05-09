@@ -80,6 +80,7 @@ describe("DashboardPage", () => {
     expect(screen.getByText("今週の実績")).toBeInTheDocument();
     expect(screen.getByText("今週の達成率")).toBeInTheDocument();
     expect(screen.getByText("完了タスク")).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-weekly-chart-frame")).toHaveClass("min-h-72", "min-w-0");
   });
 
   it("renders task selector and task summary after switching tabs", async () => {
@@ -91,5 +92,6 @@ describe("DashboardPage", () => {
     expect(screen.getByText("全体")).toBeInTheDocument();
     expect(screen.getByText("残り")).toBeInTheDocument();
     expect(screen.getByText("累計実績")).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-task-chart-frame")).toHaveClass("min-h-72", "min-w-0");
   });
 });
