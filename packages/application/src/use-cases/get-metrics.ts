@@ -6,7 +6,6 @@ export async function getMetricsUseCase(
         actualMinutes: number;
         completedMinutes: number;
         atRiskTaskCount: number;
-        pendingProposalCount: number;
       }>;
     };
   },

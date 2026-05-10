@@ -1,361 +1,307 @@
 # Task Platform
 
-認知負荷を下げながら、日々の実行と週次の見直しを分離して扱うための個人用タスク管理基盤です。
+Task Platform は、個人のタスク管理を `考える面` と `進める面` に分けるための Web ファーストな個人用基盤です。  
+思いついた task を `Inbox` に入れ、各日の余力時間と締切をもとにスケジュールし、毎日は `今日` だけ見て進めることを目的にしています。
 
-この MVP は次の考え方を中核にしています。
+## 目的
 
-- タスクはまず inbox に入れる
-- 期限、残り見積もり、各日の余力時間から日次配分案を自動生成する
-- スケジュール変更は即確定ではなく `proposal` として提示する
-- ユーザーは `Today` を見てその日の作業を進める
-- Hermes Agent などのエージェントは MCP を通じて同じアプリケーション層を利用する
+多くの task 管理では、登録した後の
 
-## 現在の実装範囲
+- 今日は何を進めるべきか
+- 期限までに安全か
+- 余力時間と残り見積もりは釣り合っているか
 
-MVP として、以下が実装されています。
+を結局ユーザーが頭の中で考え続ける必要があります。
 
-- `packages/domain`
-  - task / capacity / schedule proposal の中核ルール
-  - バッファ考慮付きの配分ロジック
-  - risk flag を含む schedule summary の生成
-- `packages/application`
-  - task 作成、task 更新、作業記録、capacity 更新
-  - proposal 生成、承認、棄却
-  - metrics 取得
-- `packages/infrastructure`
-  - SQLite 永続化
-  - migration
-  - task / capacity / proposal / work log / metrics repository
-- `packages/scheduler`
-  - 状態変更を契機に proposal を再生成する trigger
-- `apps/mcp`
-  - MCP server
-  - task / capacity / schedule / metrics 用 tools
-- `apps/web`
-  - `Today`
-  - `Inbox`
-  - `Week`
-  - `Proposals`
-  - 対応する API routes
+このリポジトリは、その認知負荷を減らすために次を目指しています。
+
+- 思いついた task をすぐ外に出す
+- 各日の余力時間を Web で管理する
+- task の性質を LLM に推定させる
+- スケジュールの再配分をシステム側で行う
+- 毎日の実行時は `今日` だけ見ればよい状態に近づける
+
+## 現在の構成
+
+このプロジェクトでは、LLM の役割を 2 つに分けています。
+
+- `MCP`
+  - 外部エージェントが app の状態を読む/更新するための面です。
+  - OpenClaw や Hermes Agent が task の進み具合、余力時間、metrics を確認する用途を想定しています。
+- `app 内部 LLM`
+  - app 自身が task の性質推定と再配分に使う面です。
+  - `.env` で指定した OpenAI 互換 endpoint、または OpenAI / Anthropic provider に接続できます。
+
+つまり、
+
+- `LLM -> app` は MCP
+- `app -> LLM` は内部 planner
+
+という分離です。
+
+## できること
+
+現時点では次が動きます。
+
+- `Inbox` で task を追加する
+- task 追加後、落ち着いたタイミングで LLM によって
+  - `taskType`
+  - `cognitiveLoad`
+  - `energy`
+  - `tags`
+  を推定する
+- 推定結果を使って current schedule を自動再計算する
+- task のタイトル、必要な時間、期限、状態、メモを更新する
+- task を削除する
+- 日ごとの余力時間を月カレンダー上で編集する
+- `今日` 画面から作業記録を入力する
+- `最後に再配分した時刻` と `次回あと何分で再配分するか` を見る
+- `ログ` 画面で変更履歴と再配分履歴を見る
+- `今日` と `計画` で current schedule と基本 metrics を見る
+- `ダッシュボード` で週次と task 別の推移を見る
+- MCP tools から task / capacity / metrics / current schedule / planning health にアクセスする
+- `Today` から、今日に割り当たっていない active task の作業記録も入れる
+
+## 画面
+
+Web UI は現在 5 画面です。
+
+- `今日` (`/`)
+  - 今日の task 列を見る画面です。
+  - `作業記録` モーダルから、進めた時間と残り時間を入力できます。
+  - `他の task を記録` から、今日に割り当たっていない active task も記録できます。
+- `Inbox` (`/inbox`)
+  - task を追加する画面です。
+  - 既存 task の編集と削除もここで行えます。
+- `計画` (`/week`)
+  - 月カレンダーで日ごとの余力時間を編集します。
+  - 横には task 一覧、残り時間、進捗率、見込み配分が出ます。
+- `ダッシュボード` (`/dashboard`)
+  - 直近 8 週間の `予定時間 / 実績時間` を週次で見ます。
+  - task を 1 つ選び、その task の週次推移も見られます。
+- `ログ` (`/logs`)
+  - 何を変更したか、いつ自動再配分が走ったかを見る画面です。
+  - 検証エラーや再配分理由もここで確認できます。
+
+`提案` 画面はありません。  
+以前の proposal 承認フローは廃止し、`一定時間変更が止まった後に自動で再配分する` 方式に置き換えています。
 
 ## リポジトリ構成
 
 ```text
 apps/
-  mcp/
-  web/
+  mcp/   # MCP server
+  web/   # Next.js Web UI
 packages/
   application/
   contracts/
   domain/
   infrastructure/
-  scheduler/
 docs/
   superpowers/
-    plans/
-    specs/
 ```
-
-## Web UI
-
-Web 側では、次の 4 画面を用意しています。
-
-- `Today`
-  - 現在承認されている schedule の slice 一覧を表示
-- `Inbox`
-  - task の追加
-  - task 一覧の確認
-- `Week`
-  - capacity と近況 metrics の確認
-- `Proposals`
-  - pending proposal の確認
-  - approve 操作
-
-現状の UI は MVP 用の最小構成で、実運用向けの見た目や編集体験は今後拡張する前提です。
-
-## 使い方
-
-### 現在の実装での基本フロー
-
-この MVP は、次の流れで使う想定です。
-
-1. `Inbox` で task を追加する
-2. task 追加や更新をきっかけに schedule proposal を生成する
-3. `Proposals` で pending proposal を確認して approve する
-4. `Today` で承認済みの schedule slice を見ながら作業する
-5. `Week` で capacity と metrics を確認する
-
-### 1. Inbox に task を入れる
-
-まず `Inbox` 画面で task を登録します。
-
-現状の UI では最低限、次を入力できます。
-
-- title
-- remaining minutes
-
-ドメイン上は `dueDate` や `urgency` も扱えるため、今後の UI 拡張でここに寄せていく想定です。
-
-### 2. Proposal を作る
-
-task 作成、task 更新、作業記録、capacity 更新は、再スケジューリングのきっかけになります。  
-スケジュールは即座に確定されず、まず `proposal` として保存されます。
-
-この設計にしている理由は次のとおりです。
-
-- agent が勝手に日程を確定しないようにする
-- 人間が差分や危険信号を確認してから反映できるようにする
-- Hermes 以外の agent でも同じ安全モデルを使えるようにする
-
-### 3. Proposal を確認して承認する
-
-`Proposals` 画面では、pending proposal を確認して approve できます。
-
-現状の画面では主に次を見ます。
-
-- proposal id
-- 生成理由
-- risk flags
-
-この段階で問題なければ approve し、承認済み proposal が current schedule として反映されます。
-
-### 4. Today を見てその日の作業を進める
-
-`Today` 画面では、現在承認されている schedule の slice 一覧を表示します。
-
-目標は、毎日この画面を見れば「今日やるべきこと」が分かる状態にすることです。  
-MVP 時点では表示は最小限ですが、思想としてはここがデータプレーンです。
-
-### 5. Week で余力と進捗を確認する
-
-`Week` 画面では、capacity と metrics を確認できます。
-
-確認対象の例:
-
-- その日の available minutes
-- buffer minutes
-- planned / actual / completed
-- at-risk tasks
-- pending proposal count
-
-将来的には、ここが週次見直しやバッファ調整の中心画面になります。
-
-## 理想運用
-
-この README は現状の実装だけでなく、このシステムで目指している近い将来の運用像も含みます。
-
-理想的には、次のように回せる状態を目指しています。
-
-1. 思いついた task をすぐ inbox に放り込む
-2. agent が残り見積もり、期限、capacity を見て proposal を作る
-3. 人間は proposal をざっと確認して承認する
-4. 毎日は `Today` の task をこなす
-5. 週末や任意のタイミングで `Week` を見ながら余力時間と計画を見直す
-
-この運用で狙っているのは、頭の中に task を抱え込み続けるのではなく、
-
-- 思いついたら inbox に逃がす
-- 配分はシステムに寄せる
-- 日々は提示された task を進める
-
-という分担にすることです。
-
-## Agent 連携
-
-このプロジェクトは MCP を前提にしており、Hermes Agent に限らず MCP 対応クライアントから利用できます。
-
-### 何を agent に任せるか
-
-MVP の基本方針は、agent に次を任せることです。
-
-- task 一覧や capacity の取得
-- schedule proposal の生成
-- pending proposal の確認補助
-- metrics の取得と状況把握
-
-一方で、schedule の確定は人間承認を前提にしています。
-
-### MCP server の起動
-
-開発中は次で MCP server を起動できます。
-
-```bash
-pnpm dev:mcp
-```
-
-build 済み成果物を使う場合は、まず build を行います。
-
-```bash
-pnpm --filter mcp build
-```
-
-### Tool の使い分け
-
-task 操作用:
-
-- `task_create`
-- `tasks_list`
-- `task_update`
-- `task_log_work`
-
-capacity 操作用:
-
-- `capacity_get`
-- `capacity_set`
-
-schedule 操作用:
-
-- `schedule_generate`
-- `schedule_get_current`
-- `schedule_list_proposals`
-- `schedule_get_proposal`
-- `schedule_approve`
-- `schedule_reject`
-
-metrics 取得用:
-
-- `metrics_get`
-
-### Hermes / MCP クライアントでの利用例
-
-#### 例1: task を inbox に追加する
-
-「レポートの下書きを今週中に 2 時間進めたい」という task を入れる場合、agent は `task_create` を呼びます。
-
-入力例:
-
-```json
-{
-  "title": "レポート下書き",
-  "remainingMinutes": 120
-}
-```
-
-必要なら、この後に `schedule_generate` を呼んで proposal を作らせます。
-
-#### 例2: pending proposal を確認する
-
-agent は `schedule_list_proposals` で pending proposal を集め、必要なら `schedule_get_proposal` で詳細を見ます。
-
-これにより、例えば次のような補助ができます。
-
-- どの task が今日に寄せられたか説明する
-- risk flags が付いた理由を要約する
-- approve 前に気になる点を列挙する
-
-#### 例3: proposal を承認する
-
-人間が内容を確認して問題ないと判断したら、agent または UI から `schedule_approve` を呼べます。
-
-このときの考え方は、
-
-- 生成は agent が補助できる
-- 反映は人間の意思で行う
-
-です。
-
-#### 例4: metrics を見て状況を振り返る
-
-agent は `metrics_get` を使って、予定対実績や危険 task を確認できます。
-
-例えば次のような問いに答えやすくなります。
-
-- 今週は予定どおり進んでいるか
-- バッファを使いすぎていないか
-- 期限危険 task があるか
-- capacity の見直しが必要か
-
-### 運用イメージ
-
-Hermes のような agent を使う場合、日々の会話は次のようなものを想定しています。
-
-- 「Inbox に task を追加して」
-- 「今の pending proposal を見せて」
-- 「今日やることを要約して」
-- 「今週まずそうな task があるか教えて」
-- 「この proposal を承認して」
-
-MCP によって、こうした操作を UI と agent の両方から同じモデルで扱えるようにしています。
-
-## MCP Tools
-
-MCP server では、次の tool 群を公開しています。
-
-- `task_create`
-- `tasks_list`
-- `task_update`
-- `task_log_work`
-- `capacity_get`
-- `capacity_set`
-- `schedule_generate`
-- `schedule_get_current`
-- `schedule_list_proposals`
-- `schedule_get_proposal`
-- `schedule_approve`
-- `schedule_reject`
-- `metrics_get`
-
-基本方針は、agent が直接スケジュールを破壊的に確定するのではなく、proposal を生成し、人間が確認して承認することです。
-
-## 技術スタック
-
-- TypeScript
-- pnpm workspace
-- Next.js App Router
-- Vitest
-- zod
-- better-sqlite3
-- `@modelcontextprotocol/sdk`
 
 ## セットアップ
+
+### 前提
+
+- Node.js
+- pnpm
+
+### インストール
 
 ```bash
 pnpm install
 ```
 
-`better-sqlite3` を使うため、環境によってはネイティブ build が必要です。
-
-## 開発コマンド
-
-ルートの `package.json` から次を利用できます。
+### 開発起動
 
 ```bash
-pnpm test
-pnpm lint
+pnpm dev
+```
+
+個別起動もできます。
+
+```bash
 pnpm dev:web
 pnpm dev:mcp
-pnpm build
 ```
 
-個別には次も使えます。
+通常、Web UI は `http://localhost:3000` で開きます。
+
+### DB
+
+SQLite ファイルはデフォルトでリポジトリ直下の `task-platform.db` に作られます。  
+変更したい場合は `TASK_PLATFORM_DB` を指定します。
 
 ```bash
-pnpm --filter web build
-pnpm --filter mcp build
+TASK_PLATFORM_DB=/tmp/task-platform.db pnpm dev
 ```
 
-## テストと検証
+## LLM 設定
 
-このブランチでは、少なくとも以下の検証を通しています。
+app 内部 planner は、次の環境変数で provider を切り替えます。
+
+- `TASK_PLATFORM_LLM_PROVIDER`
+  - `openai-compatible`
+  - `openai`
+  - `anthropic`
+- `TASK_PLATFORM_LLM_MODEL`
+- `TASK_PLATFORM_LLM_BASE_URL`
+  - `openai-compatible` のときに使用
+- `TASK_PLATFORM_LLM_API_KEY`
+- `TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS`
+  - `true` / `false`
+- `TASK_PLATFORM_LLM_TIMEOUT_MS`
+  - 自動再配分で内部 LLM を待つ最大時間
+
+### ローカル OpenAI 互換 LLM の例
+
+```bash
+TASK_PLATFORM_LLM_PROVIDER=openai-compatible
+TASK_PLATFORM_LLM_MODEL=your-local-model
+TASK_PLATFORM_LLM_BASE_URL=http://127.0.0.1:1234/v1
+TASK_PLATFORM_LLM_API_KEY=local
+TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS=true
+TASK_PLATFORM_LLM_TIMEOUT_MS=20000
+```
+
+この設定で、自動再配分時にローカル LLM へ structured output を要求します。  
+structured output が使えない provider では plain JSON 形式に切り替えて推論します。  
+推論に失敗した場合は `再配分失敗` として記録し、簡易推定にはフォールバックしません。
+
+## 最初の使い方
+
+最小フローは次です。
+
+1. `計画` で日ごとの余力時間を入れる
+2. `Inbox` で task を追加する
+3. 変更が止まると自動再配分を待つ
+4. `今日` でその日の task を進める
+5. 作業後に `作業記録` を入れる
+6. `ダッシュボード` で週次や task 別の進み方を見る
+7. `ログ` で変更履歴と再配分履歴を見る
+
+## 運用イメージ
+
+### task を追加する
+
+`Inbox` では次を入力します。
+
+- タイトル
+- 必要な時間
+- 期限
+- メモ
+
+その後 `追加` を押すと、
+
+- 変更が保存され
+- 一定時間変更が止まると task の性質推定
+- current schedule の再計算
+- 必要時間・期限・余力時間に矛盾がないかの validation
+
+をバックグラウンドで行います。
+
+### 余力時間を入れる
+
+`計画` 画面の月カレンダーから日付を押すと、その日の余力時間をモーダルで編集できます。  
+ここで入れる値は、`その日に task に使える最大時間` です。
+
+変更後はすぐに重い推論をせず、最後の変更から 3 分以上経ってから自動再配分します。
+必要なら header の `3分延長` から次回実行を後ろにずらせます。
+
+### 作業を記録する
+
+`今日` 画面の `作業記録` から、
+
+- 進めた時間
+- 残り時間
+- 完了扱いにするか
+
+を入力できます。  
+保存後は変更履歴に積まれ、落ち着いたタイミングで自動再配分されます。
+
+その日に割り当たっていない task を進めた場合でも、`他の task を記録` から記録できます。  
+未完了なら `remainingMinutesAfter` が更新され、次回の自動再配分で残り作業として持ち越されます。
+
+### 自動再配分
+
+自動再配分は即時ではなく、次の条件で走ります。
+
+- 何らかの変更が入っている
+- 最後の変更から 3 分以上経過している
+- その変更 revision に対してまだ再配分していない
+
+各日の `availableMinutes` は、その日に task に使ってよい最大時間です。  
+scheduler は原則としてその 80% を通常予算、残り 20% をバッファとして扱います。通常予算内で収まる限りはバッファを残し、期限や総量の都合で必要なときだけバッファを使います。
+
+再配分中にさらに変更が入った場合、その実行結果は current schedule に採用せず、`再実行待ち` のまま次の tick に回します。
+
+### ログ
+
+`ログ` 画面では次を確認できます。
+
+- task 追加、編集、削除
+- 余力時間の編集
+- 作業記録の追加
+- 自動再配分の実行履歴
+- 検証エラーや実行エラー
+
+## ダッシュボード
+
+`ダッシュボード` では、入力や再配分ではなく、進み方の傾向を確認します。
+
+- `週次`
+  - 直近 8 週間の `予定時間` と `実績時間` を並べて表示します。
+  - 今週の予定、実績、達成率、完了 task 数も確認できます。
+- `タスク別`
+  - task を 1 つ選び、その task の直近 8 週間の `予定時間` と `実績時間` を見ます。
+  - 全体時間、残り時間、進捗率、期限、累計実績も確認できます。
+
+## MCP 連携
+
+MCP は外部エージェントが app の状態を読む/操作するための面です。  
+現在の tool は次です。
+
+- task
+  - `task_create`
+  - `tasks_list`
+- `task_update`
+- `task_delete`
+- `task_log_work`
+- `work_logs_list`
+- capacity
+  - `capacity_get`
+  - `capacity_set`
+- schedule
+  - `schedule_get_current`
+- metrics
+  - `metrics_get`
+- `planning_health_get`
+  - `scheduler_status_get`
+  - `scheduler_delay`
+  - `scheduler_logs_list`
+
+### 想定用途
+
+- Hermes Agent が task の増減や進み具合を確認する
+- OpenClaw が metrics を読み、日次/週次の振り返りを支援する
+- エージェントが `capacity` や task 更新を補助する
+
+MCP 側は監視面・操作面であり、task 性質推定や自動再配分そのものは app 内部 LLM が担当します。
+
+## 開発用コマンド
 
 ```bash
 pnpm test
 pnpm --filter mcp build
-timeout 60s pnpm --filter web build
+pnpm --filter web build
 ```
 
-## ドキュメント
+補足として、`web build` では `workspace-path.ts` 起因の NFT trace warning が出ることがありますが、現状 build 自体は通ります。
 
-設計と計画は次を参照してください。
+## 補足
+
+詳細な設計メモは以下を参照してください。
 
 - [docs/superpowers/specs/2026-04-27-task-platform-design.md](docs/superpowers/specs/2026-04-27-task-platform-design.md)
-- [docs/superpowers/plans/2026-04-27-task-platform-mvp.md](docs/superpowers/plans/2026-04-27-task-platform-mvp.md)
-
-## 今後の拡張候補
-
-- Inbox / task 編集 UI の強化
-- proposal 差分表示の改善
-- metrics の拡充
-- 日次・週次レビュー導線の強化
-- LMS や外部サービスとの連携
-- habit 管理の分離導入

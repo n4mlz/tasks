@@ -5,3 +5,6 @@ export * from "./sqlite-capacity-repository";
 export * from "./sqlite-schedule-repository";
 export * from "./sqlite-worklog-repository";
 export * from "./sqlite-metrics-repository";
+export * from "./sqlite-dashboard-repository";
+export * from "./sqlite-scheduler-state-repository";
+export * from "./workspace-path";

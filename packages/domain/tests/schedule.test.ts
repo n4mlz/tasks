@@ -1,11 +1,64 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildScheduleProposal,
+  buildSchedulePlan,
   createDayCapacity,
   createTask,
+  validateSchedulePlan,
 } from "../src/index";
 
-describe("schedule proposal generation", () => {
+describe("schedule plan generation", () => {
+  it("uses a multi-day horizon and schedules before the due date", () => {
+    const plan = buildSchedulePlan({
+      today: "2026-04-27",
+      tasks: [
+        createTask({
+          id: "task_1",
+          title: "Seminar draft",
+          remainingMinutes: 180,
+          createdAt: "2026-04-27T00:00:00.000Z",
+          dueDate: "2026-05-01",
+        }),
+      ],
+      capacities: [
+        createDayCapacity({ date: "2026-04-27", availableMinutes: 60, bufferMinutes: 0 }),
+        createDayCapacity({ date: "2026-04-28", availableMinutes: 60, bufferMinutes: 0 }),
+        createDayCapacity({ date: "2026-04-29", availableMinutes: 60, bufferMinutes: 0 }),
+        createDayCapacity({ date: "2026-04-30", availableMinutes: 60, bufferMinutes: 0 }),
+      ],
+    });
+
+    expect(plan.horizonEnd).toBe("2026-04-30");
+    expect(plan.slices).toHaveLength(3);
+    expect(plan.summary.unscheduledTaskIds).toEqual([]);
+  });
+
+  it("marks unscheduled work and capacity pressure", () => {
+    const plan = buildSchedulePlan({
+      today: "2026-04-27",
+      tasks: [
+        createTask({
+          id: "task_risky",
+          title: "Big report",
+          remainingMinutes: 300,
+          createdAt: "2026-04-27T00:00:00.000Z",
+          dueDate: "2026-04-29",
+          taskType: "writing",
+          energy: "high",
+        }),
+      ],
+      capacities: [
+        createDayCapacity({ date: "2026-04-27", availableMinutes: 60, bufferMinutes: 0 }),
+        createDayCapacity({ date: "2026-04-28", availableMinutes: 60, bufferMinutes: 0 }),
+      ],
+    });
+
+    expect(plan.riskFlags).toContain(
+      "task_risky:insufficient_capacity_before_due_date",
+    );
+    expect(plan.summary.unscheduledTaskIds).toContain("task_risky");
+    expect(plan.summary.capacityPressureByDate["2026-04-27"]).toBeGreaterThan(0);
+  });
+
   it("places urgency=today work on the current day first", () => {
     const tasks = [
       createTask({
@@ -22,13 +75,13 @@ describe("schedule proposal generation", () => {
       createDayCapacity({ date: "2026-04-28", availableMinutes: 120 }),
     ];
 
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks,
       capacities,
     });
 
-    expect(proposal.slices).toEqual([
+    expect(plan.slices).toEqual([
       {
         taskId: "task_today",
         date: "2026-04-27",
@@ -54,19 +107,19 @@ describe("schedule proposal generation", () => {
       createDayCapacity({ date: "2026-04-28", availableMinutes: 120 }),
     ];
 
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks,
       capacities,
     });
 
-    expect(proposal.riskFlags).toContain(
+    expect(plan.riskFlags).toContain(
       "task_deadline:insufficient_capacity_before_due_date",
     );
   });
 
   it("does not emit zero-minute slices", () => {
-    const proposal = buildScheduleProposal({
+    const plan = buildSchedulePlan({
       today: "2026-04-27",
       tasks: [
         createTask({
@@ -85,6 +138,149 @@ describe("schedule proposal generation", () => {
       ],
     });
 
-    expect(proposal.slices[0]?.plannedMinutes).toBe(25);
+    expect(plan.slices[0]?.plannedMinutes).toBe(25);
+  });
+
+  it("can still schedule work on the due date when the due date is today", () => {
+    const plan = buildSchedulePlan({
+      today: "2026-05-07",
+      tasks: [
+        createTask({
+          id: "task_due_today",
+          title: "Essay due today",
+          remainingMinutes: 30,
+          dueDate: "2026-05-07",
+          createdAt: "2026-05-07T00:00:00.000Z",
+        }),
+      ],
+      capacities: [
+        createDayCapacity({
+          date: "2026-05-07",
+          availableMinutes: 60,
+          bufferMinutes: 0,
+        }),
+      ],
+    });
+
+    expect(plan.summary.unscheduledTaskIds).toEqual([]);
+    expect(plan.slices).toEqual([
+      {
+        taskId: "task_due_today",
+        date: "2026-05-07",
+        plannedMinutes: 30,
+        kind: "focus",
+      },
+    ]);
+  });
+
+  it("treats unscheduled work as risk instead of a structural validation error", () => {
+    const tasks = [
+      createTask({
+        id: "task_risky",
+        title: "Big report",
+        remainingMinutes: 300,
+        createdAt: "2026-04-27T00:00:00.000Z",
+        dueDate: "2026-04-29",
+      }),
+    ];
+    const capacities = [
+      createDayCapacity({ date: "2026-04-27", availableMinutes: 60, bufferMinutes: 0 }),
+      createDayCapacity({ date: "2026-04-28", availableMinutes: 60, bufferMinutes: 0 }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-04-27",
+      tasks,
+      capacities,
+    });
+    const validation = validateSchedulePlan({
+      plan,
+      tasks,
+      capacities,
+    });
+
+    expect(plan.summary.unscheduledTaskIds).toContain("task_risky");
+    expect(plan.riskFlags).toContain("task_risky:insufficient_capacity_before_due_date");
+    expect(validation.isValid).toBe(true);
+    expect(validation.errors).toEqual([]);
+  });
+
+  it("keeps work inside the 80% base budget when possible", () => {
+    const task = createTask({
+      id: "task_base_budget",
+      title: "Write report",
+      remainingMinutes: 360,
+      createdAt: "2026-05-08T00:00:00.000Z",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBe(0);
+    expect(plan.summary.datesUsingReserve).toEqual([]);
+    expect(plan.summary.insufficientEvenWithReserve).toBe(false);
+  });
+
+  it("uses reserve only when base budget is insufficient", () => {
+    const task = createTask({
+      id: "task_reserve_budget",
+      title: "Finish slide deck",
+      remainingMinutes: 420,
+      createdAt: "2026-05-08T00:00:00.000Z",
+      dueDate: "2026-05-09",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBe(36);
+    expect(plan.summary.datesUsingReserve).toContain("2026-05-08");
+  });
+
+  it("marks reserve usage as valid rather than structurally invalid", () => {
+    const task = createTask({
+      id: "task_validation_reserve",
+      title: "Finish essay",
+      remainingMinutes: 420,
+      createdAt: "2026-05-08T00:00:00.000Z",
+    });
+    const capacities = [
+      createDayCapacity({
+        date: "2026-05-08",
+        availableMinutes: 480,
+      }),
+    ];
+
+    const plan = buildSchedulePlan({
+      today: "2026-05-08",
+      tasks: [task],
+      capacities,
+    });
+    const validation = validateSchedulePlan({
+      plan,
+      tasks: [task],
+      capacities,
+    });
+
+    expect(validation.isValid).toBe(true);
+    expect(plan.summary.bufferUsageByDate["2026-05-08"]).toBeGreaterThan(0);
   });
 });

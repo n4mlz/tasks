@@ -1,23 +1,33 @@
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import {
-  approveProposalUseCase,
   createTaskUseCase,
-  generateScheduleProposalUseCase,
+  deleteTaskUseCase,
+  getDashboardTaskTimelineUseCase,
+  getDashboardWeeklySummaryUseCase,
   getMetricsUseCase,
+  getPlanningHealthUseCase,
+  getSchedulerStatusUseCase,
+  listSchedulerLogsUseCase,
   logWorkUseCase,
-  rejectProposalUseCase,
+  postponeSchedulerUseCase,
+  runSchedulerTickUseCase,
   setCapacityUseCase,
   updateTaskUseCase,
 } from "../../../packages/application/src/index";
 import {
   createDatabase,
   migrate,
+  resolveWorkspaceRoot,
   SqliteCapacityRepository,
+  SqliteDashboardRepository,
   SqliteMetricsRepository,
+  SqliteSchedulerStateRepository,
   SqliteScheduleRepository,
   SqliteTaskRepository,
   SqliteWorkLogRepository,
 } from "../../../packages/infrastructure/src/index";
+import { createPlanningIntelligence } from "./planning-intelligence";
 
 type TaskPlatform = {
   createTask: (input: {
@@ -25,6 +35,19 @@ type TaskPlatform = {
     remainingMinutes: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?:
+      | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
+      | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     notes?: string;
   }) => Promise<void>;
   logWork: (input: {
@@ -39,36 +62,92 @@ type TaskPlatform = {
     availableMinutes: number;
     bufferMinutes?: number;
   }) => Promise<void>;
-  approveProposal: (input: { proposalId: string }) => Promise<void>;
-  rejectProposal: (input: { proposalId: string }) => Promise<void>;
+  deleteTask: (input: { taskId: string }) => Promise<void>;
   updateTask: (input: {
     taskId: string;
     title?: string;
     remainingMinutes?: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?:
+      | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
+      | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   }) => Promise<void>;
-  generateSchedule: (input: {
-    reason: "task_created" | "task_updated" | "work_logged" | "capacity_updated" | "manual";
-  }) => Promise<void>;
-  listTasks: () => Promise<unknown>;
+  listTasks: (input?: {
+    status?: "inbox" | "active" | "done" | "archived";
+    dueBefore?: string;
+    scheduledOn?: string;
+  }) => Promise<unknown>;
   getCapacities: (dateFrom: string, dateTo: string) => Promise<unknown>;
-  listProposals: (status?: string) => Promise<unknown>;
-  getProposal: (proposalId: string) => Promise<unknown>;
   getCurrentSchedule: () => Promise<unknown>;
-  getMetrics: (dateFrom: string, dateTo: string) => Promise<unknown>;
+  getMetrics: (dateFrom?: string, dateTo?: string) => Promise<unknown>;
+  getDashboardWeeklySummary: () => Promise<unknown>;
+  getDashboardTaskTimeline: (taskId: string) => Promise<unknown>;
+  getPlanningHealth: () => Promise<unknown>;
+  getWorkLogs: (input: {
+    taskIds?: string[];
+    dateFrom?: string;
+    dateTo?: string;
+  } | string[]) => Promise<unknown>;
+  getSchedulerStatus: () => Promise<unknown>;
+  postponeScheduler: (input: { delayMilliseconds: number }) => Promise<void>;
+  listSchedulerLogs: () => Promise<unknown>;
+  runSchedulerTick: (input?: { force?: boolean }) => Promise<unknown>;
 };
 
 let taskPlatformInstance: TaskPlatform | null = null;
+const BACKGROUND_SCHEDULER_KEY = "__taskPlatformBackgroundScheduler";
+
+export function startBackgroundScheduler(taskPlatform: Pick<TaskPlatform, "runSchedulerTick">, intervalMs = 30_000) {
+  const registry = globalThis as typeof globalThis & {
+    [BACKGROUND_SCHEDULER_KEY]?: ReturnType<typeof setInterval>;
+  };
+
+  if (registry[BACKGROUND_SCHEDULER_KEY]) {
+    return registry[BACKGROUND_SCHEDULER_KEY];
+  }
+
+  const timer = setInterval(() => {
+    void taskPlatform.runSchedulerTick().catch(() => {});
+  }, intervalMs);
+  timer.unref?.();
+
+  registry[BACKGROUND_SCHEDULER_KEY] = timer;
+  return timer;
+}
+
+function resolveDatabasePath(): string {
+  const workspaceRoot = resolveWorkspaceRoot();
+  const configuredPath = process.env.TASK_PLATFORM_DB;
+
+  if (!configuredPath) {
+    return path.join(workspaceRoot, "task-platform.db");
+  }
+  if (path.isAbsolute(configuredPath)) {
+    return configuredPath;
+  }
+  return path.join(workspaceRoot, configuredPath);
+}
 
 function getTaskPlatform(): TaskPlatform {
   if (taskPlatformInstance) {
     return taskPlatformInstance;
   }
 
-  const db = createDatabase(process.env.TASK_PLATFORM_DB ?? "task-platform.db");
+  const dbPath = resolveDatabasePath();
+  const db = createDatabase(dbPath);
   migrate(db);
 
   const taskRepository = new SqliteTaskRepository(db);
@@ -76,6 +155,9 @@ function getTaskPlatform(): TaskPlatform {
   const scheduleRepository = new SqliteScheduleRepository(db);
   const workLogRepository = new SqliteWorkLogRepository(db);
   const metricsRepository = new SqliteMetricsRepository(db);
+  const dashboardRepository = new SqliteDashboardRepository(db);
+  const schedulerStateRepository = new SqliteSchedulerStateRepository(db);
+  const planningIntelligence = createPlanningIntelligence();
 
   const clock = {
     now: () => new Date().toISOString(),
@@ -91,8 +173,7 @@ function getTaskPlatform(): TaskPlatform {
       return createTaskUseCase(
         {
           taskRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -104,8 +185,7 @@ function getTaskPlatform(): TaskPlatform {
         {
           taskRepository,
           workLogRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
@@ -116,27 +196,20 @@ function getTaskPlatform(): TaskPlatform {
       return setCapacityUseCase(
         {
           capacityRepository,
-          taskRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
         input,
       );
     },
-    async approveProposal(input) {
-      return approveProposalUseCase(
+    async deleteTask(input) {
+      return deleteTaskUseCase(
         {
-          scheduleRepository,
+          taskRepository,
+          schedulerStateRepository,
           clock,
-        },
-        input,
-      );
-    },
-    async rejectProposal(input) {
-      return rejectProposalUseCase(
-        {
-          scheduleRepository,
+          idGenerator,
         },
         input,
       );
@@ -145,50 +218,120 @@ function getTaskPlatform(): TaskPlatform {
       return updateTaskUseCase(
         {
           taskRepository,
-          capacityRepository,
-          scheduleRepository,
+          schedulerStateRepository,
           clock,
           idGenerator,
         },
         input,
       );
     },
-    async generateSchedule(input) {
-      return generateScheduleProposalUseCase(
-        {
-          taskRepository,
-          capacityRepository,
-          scheduleRepository,
-          clock,
-          idGenerator,
-        },
-        input,
-      );
-    },
-    async listTasks() {
-      return taskRepository.listAll();
+    async listTasks(input) {
+      let tasks = await taskRepository.listAll();
+
+      if (input?.status) {
+        tasks = tasks.filter((task) => task.status === input.status);
+      }
+
+      if (input?.dueBefore) {
+        const dueBefore = input.dueBefore;
+        tasks = tasks.filter((task) => task.dueDate && task.dueDate <= dueBefore);
+      }
+
+      if (input?.scheduledOn) {
+        const schedule = (await scheduleRepository.getCurrentSchedule()) as {
+          slices: Array<{ task_id?: string; date?: string }>;
+        };
+        const scheduledTaskIds = new Set(
+          schedule.slices
+            .filter((slice) => slice.date === input.scheduledOn && slice.task_id)
+            .map((slice) => String(slice.task_id)),
+        );
+        tasks = tasks.filter((task) => scheduledTaskIds.has(task.id));
+      }
+
+      return tasks;
     },
     async getCapacities(dateFrom: string, dateTo: string) {
       return capacityRepository.listBetween(dateFrom, dateTo);
     },
-    async listProposals(status?: string) {
-      return scheduleRepository.listByStatus(status);
-    },
-    async getProposal(proposalId: string) {
-      return scheduleRepository.findById(proposalId);
-    },
     async getCurrentSchedule() {
       return scheduleRepository.getCurrentSchedule();
     },
-    async getMetrics(dateFrom: string, dateTo: string) {
+    async getMetrics(dateFrom?: string, dateTo?: string) {
+      const resolvedDateFrom = dateFrom ?? clock.today();
+      const resolvedDateTo = dateTo ?? resolvedDateFrom;
       return getMetricsUseCase(
         {
           metricsRepository,
         },
-        { dateFrom, dateTo },
+        { dateFrom: resolvedDateFrom, dateTo: resolvedDateTo },
       );
     },
+    async getDashboardWeeklySummary() {
+      return getDashboardWeeklySummaryUseCase({
+        dashboardRepository,
+        today: clock.today(),
+      });
+    },
+    async getDashboardTaskTimeline(taskId: string) {
+      return getDashboardTaskTimelineUseCase({
+        dashboardRepository,
+        taskId,
+        today: clock.today(),
+      });
+    },
+    async getPlanningHealth() {
+      return getPlanningHealthUseCase(
+        {
+          capacityRepository,
+          taskRepository,
+          clock,
+        },
+        {},
+      );
+    },
+    async getWorkLogs(input: { taskIds?: string[]; dateFrom?: string; dateTo?: string } | string[]) {
+      if (Array.isArray(input)) {
+        return workLogRepository.listByTaskIds(input);
+      }
+      return workLogRepository.list(input);
+    },
+    async getSchedulerStatus() {
+      return getSchedulerStatusUseCase({
+        schedulerStateRepository,
+        clock,
+      });
+    },
+    async postponeScheduler(input) {
+      return postponeSchedulerUseCase(
+        {
+          schedulerStateRepository,
+          clock,
+        },
+        input,
+      );
+    },
+    async listSchedulerLogs() {
+      return listSchedulerLogsUseCase({
+        schedulerStateRepository,
+      });
+    },
+    async runSchedulerTick(input) {
+      return runSchedulerTickUseCase({
+        taskRepository,
+        capacityRepository,
+        scheduleRepository,
+        schedulerStateRepository,
+        planningIntelligence,
+        clock,
+        idGenerator,
+      }, input);
+    },
   };
+
+  if (process.env.NODE_ENV !== "test") {
+    startBackgroundScheduler(taskPlatformInstance);
+  }
 
   return taskPlatformInstance;
 }

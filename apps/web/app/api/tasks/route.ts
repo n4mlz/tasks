@@ -1,13 +1,35 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
+import { hoursToMinutes } from "../../../lib/presentation";
+
+async function readTaskPayload(request: Request) {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return request.json();
+  }
+
+  const formData = await request.formData();
+  return Object.fromEntries(formData.entries());
+}
 
 export async function POST(request: Request) {
-  const json = await request.json();
+  const json = await readTaskPayload(request);
   const parsed = {
     title: String(json.title ?? ""),
-    remainingMinutes: Number(json.remainingMinutes),
-    dueDate: typeof json.dueDate === "string" ? json.dueDate : undefined,
+    remainingMinutes: hoursToMinutes(Number(json.remainingMinutes)),
+    dueDate: typeof json.dueDate === "string" && json.dueDate ? json.dueDate : undefined,
     urgency: json.urgency,
+    taskType: json.taskType,
+    cognitiveLoad: json.cognitiveLoad,
+    energy: json.energy,
+    tags: Array.isArray(json.tags)
+      ? json.tags.filter((value: unknown): value is string => typeof value === "string")
+      : typeof json.tags === "string" && json.tags
+        ? String(json.tags)
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : undefined,
     notes: typeof json.notes === "string" ? json.notes : undefined,
   };
 
@@ -16,6 +38,10 @@ export async function POST(request: Request) {
   }
 
   await taskPlatform.createTask(parsed);
+
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+    return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

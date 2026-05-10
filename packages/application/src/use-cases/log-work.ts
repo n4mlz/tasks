@@ -1,19 +1,18 @@
-import { buildScheduleProposal, updateTaskEstimate } from "@task-platform/domain";
+import { updateTaskEstimate } from "@task-platform/domain";
 import type {
-  CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
+  SchedulerStateRepository,
   TaskRepository,
   WorkLogRepository,
 } from "../ports";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function logWorkUseCase(
   deps: {
     taskRepository: Pick<TaskRepository, "findById" | "save" | "listSchedulable">;
     workLogRepository: WorkLogRepository;
-    capacityRepository: Pick<CapacityRepository, "listBetween">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -34,6 +33,13 @@ export async function logWorkUseCase(
     remainingMinutes: input.remainingMinutesAfter,
     updatedAt: deps.clock.now(),
   });
+  const savedTask =
+    input.remainingMinutesAfter === 0
+      ? {
+          ...updatedTask,
+          status: "done" as const,
+        }
+      : updatedTask;
 
   await deps.workLogRepository.append({
     id: deps.idGenerator.next("worklog"),
@@ -44,23 +50,18 @@ export async function logWorkUseCase(
     note: input.note ?? "",
   });
 
-  await deps.taskRepository.save(updatedTask);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    deps.clock.today(),
-  );
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "work_logged",
-    generatedAt: deps.clock.now(),
+  await deps.taskRepository.save(savedTask);
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "work_logged",
+    entityType: "task",
+    entityId: savedTask.id,
+    details: {
+      spentMinutes: input.spentMinutes,
+      remainingMinutesAfter: input.remainingMinutesAfter,
+      date: input.date,
+    },
   });
 }

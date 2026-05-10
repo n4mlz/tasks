@@ -8,8 +8,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.72",
+    "@ai-sdk/openai": "^3.0.54",
+    "@ai-sdk/openai-compatible": "^2.0.42",
     "@task-platform/contracts": "workspace:*",
-    "@task-platform/domain": "workspace:*"
+    "@task-platform/domain": "workspace:*",
+    "ai": "^6.0.170"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

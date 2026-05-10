@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "scripts": {
+    "dev": "sh -c 'pnpm dev:web & pnpm dev:mcp & wait'",
     "build": "pnpm -r build",
     "test": "vitest --run",
     "test:domain": "vitest --run packages/domain/tests",

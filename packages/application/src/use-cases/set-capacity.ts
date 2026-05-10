@@ -1,17 +1,16 @@
-import { buildScheduleProposal, createDayCapacity } from "@task-platform/domain";
+import { createDayCapacity } from "@task-platform/domain";
 import type {
   CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
-  TaskRepository,
+  SchedulerStateRepository,
 } from "../ports";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function setCapacityUseCase(
   deps: {
-    capacityRepository: Pick<CapacityRepository, "upsert" | "listBetween">;
-    taskRepository: Pick<TaskRepository, "listSchedulable">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    capacityRepository: Pick<CapacityRepository, "upsert">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -23,22 +22,15 @@ export async function setCapacityUseCase(
 ): Promise<void> {
   const capacity = createDayCapacity(input);
   await deps.capacityRepository.upsert(capacity);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    input.date,
-  );
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "capacity_updated",
-    generatedAt: deps.clock.now(),
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "capacity_updated",
+    entityType: "capacity",
+    entityId: capacity.date,
+    details: {
+      availableMinutes: capacity.availableMinutes,
+    },
   });
 }

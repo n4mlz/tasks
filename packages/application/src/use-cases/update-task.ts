@@ -1,17 +1,15 @@
-import { buildScheduleProposal } from "@task-platform/domain";
 import type {
-  CapacityRepository,
   Clock,
   IdGenerator,
-  ScheduleRepository,
+  SchedulerStateRepository,
   TaskRepository,
 } from "../ports";
+import { recordPlanningMutation } from "../record-mutation";
 
 export async function updateTaskUseCase(
   deps: {
     taskRepository: Pick<TaskRepository, "findById" | "save" | "listSchedulable">;
-    capacityRepository: Pick<CapacityRepository, "listBetween">;
-    scheduleRepository: Pick<ScheduleRepository, "savePendingProposal">;
+    schedulerStateRepository: Pick<SchedulerStateRepository, "recordMutation">;
     clock: Clock;
     idGenerator: IdGenerator;
   },
@@ -21,6 +19,19 @@ export async function updateTaskUseCase(
     remainingMinutes?: number;
     dueDate?: string | null;
     urgency?: "today" | "soon" | "normal";
+    taskType?:
+      | "implementation"
+      | "writing"
+      | "research"
+      | "communication"
+      | "memorization"
+      | "admin"
+      | "design"
+      | "other"
+      | "unknown";
+    cognitiveLoad?: "low" | "medium" | "high" | "unknown";
+    energy?: "low" | "medium" | "high" | "unknown";
+    tags?: string[];
     status?: "inbox" | "active" | "done" | "archived";
     notes?: string;
   },
@@ -36,28 +47,28 @@ export async function updateTaskUseCase(
     remainingMinutes: input.remainingMinutes ?? task.remainingMinutes,
     dueDate: input.dueDate === undefined ? task.dueDate : input.dueDate,
     urgency: input.urgency ?? task.urgency,
+    taskType: input.taskType ?? task.taskType,
+    cognitiveLoad: input.cognitiveLoad ?? task.cognitiveLoad,
+    energy: input.energy ?? task.energy,
+    tags: input.tags ?? task.tags,
     status: input.status ?? task.status,
     notes: input.notes ?? task.notes,
     updatedAt: deps.clock.now(),
   };
 
   await deps.taskRepository.save(updatedTask);
-
-  const tasks = await deps.taskRepository.listSchedulable();
-  const capacities = await deps.capacityRepository.listBetween(
-    deps.clock.today(),
-    deps.clock.today(),
-  );
-  const proposal = buildScheduleProposal({
-    today: deps.clock.today(),
-    tasks,
-    capacities,
-  });
-
-  await deps.scheduleRepository.savePendingProposal({
-    ...proposal,
-    id: deps.idGenerator.next("proposal"),
-    reason: "task_updated",
-    generatedAt: deps.clock.now(),
+  await recordPlanningMutation({
+    schedulerStateRepository: deps.schedulerStateRepository,
+    clock: deps.clock,
+    idGenerator: deps.idGenerator,
+    mutationKind: "task_updated",
+    entityType: "task",
+    entityId: updatedTask.id,
+    details: {
+      title: updatedTask.title,
+      dueDate: updatedTask.dueDate,
+      remainingMinutes: updatedTask.remainingMinutes,
+      status: updatedTask.status,
+    },
   });
 }
