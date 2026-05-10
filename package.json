@@ -10,7 +10,8 @@
     "lint": "tsc -b --pretty false",
     "dev:web": "pnpm --filter web dev",
     "dev:mcp": "pnpm --filter mcp dev",
-    "verify:dockerfile": "test -f Dockerfile"
+    "verify:dockerfile": "test -f Dockerfile",
+    "verify:compose": "test -f compose.yml"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
