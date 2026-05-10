@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     command: pnpm dev
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       HOST: 0.0.0.0
       PORT: ${PORT:-3000}
