@@ -129,6 +129,28 @@ pnpm dev:mcp
 
 通常、Web UI は `http://localhost:3000` で開きます。
 
+### Docker Compose
+
+`.env` をリポジトリ直下に置いたうえで、次で一式起動できます。
+
+```bash
+docker compose up --build
+```
+
+Web UI はデフォルトで `http://localhost:3000` に公開されます。
+
+ポートを変えたい場合は `PORT` を指定します。
+
+```bash
+PORT=3001 docker compose up --build
+```
+
+SQLite はデフォルトで Compose volume 上の `/data/task-platform.db` に保存されます。保存先を変えたい場合は `TASK_PLATFORM_DB` を指定します。
+
+```bash
+TASK_PLATFORM_DB=/data/custom-task-platform.db docker compose up --build
+```
+
 ### DB
 
 SQLite ファイルはデフォルトでリポジトリ直下の `task-platform.db` に作られます。  

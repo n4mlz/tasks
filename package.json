@@ -11,7 +11,9 @@
     "dev:web": "pnpm --filter web dev",
     "dev:mcp": "pnpm --filter mcp dev",
     "verify:dockerfile": "test -f Dockerfile",
-    "verify:compose": "test -f compose.yml"
+    "verify:compose": "test -f compose.yml",
+    "verify:docker-docs": "rg -n \"docker compose up --build\" README.md && rg -n \"PORT=3001 docker compose up --build\" README.md && rg -n \"Compose volume 上の\" README.md && rg -n \"TASK_PLATFORM_DB=/data/custom-task-platform.db docker compose up --build\" README.md",
+    "verify:docker": "pnpm verify:dockerfile && pnpm verify:compose && pnpm verify:docker-docs"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
