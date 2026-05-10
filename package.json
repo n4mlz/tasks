@@ -9,7 +9,8 @@
     "test:domain": "vitest --run packages/domain/tests",
     "lint": "tsc -b --pretty false",
     "dev:web": "pnpm --filter web dev",
-    "dev:mcp": "pnpm --filter mcp dev"
+    "dev:mcp": "pnpm --filter mcp dev",
+    "verify:dockerfile": "test -f Dockerfile"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
