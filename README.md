@@ -261,11 +261,48 @@ Web UI が使う主な route は次です。
 - `scheduler_status_get`
 - `scheduler_delay`
 - `scheduler_logs_list`
+- `scheduler_run`
 
 注意:
 
 - これらの tool schema と server registration は [apps/mcp/src/server.ts](/home/noname/me/workspace/personal/tasks/apps/mcp/src/server.ts:1) にあります
-- `main` 時点では stdio transport や実行 bootstrap がないため、README 上で「MCP server がそのまま接続可能」とは書いていません
+
+### 接続方法
+
+現在は stdio transport を実装しているので、MCP client からそのまま接続できます。
+
+最短では次で stdio server を起動できます。
+
+```bash
+pnpm --filter mcp start
+```
+
+`Claude Desktop` などの stdio client には、たとえば次のように設定できます。
+
+```json
+{
+  "mcpServers": {
+    "task-platform": {
+      "command": "pnpm",
+      "args": [
+        "--dir",
+        "/absolute/path/to/tasks",
+        "--filter",
+        "mcp",
+        "start"
+      ]
+    }
+  }
+}
+```
+
+補足:
+
+- `.env` と `.env.local` は起動時に自動で読みます
+- `TASK_PLATFORM_DB` を渡さなければ repo root の `task-platform.db` を使います
+- `pnpm --filter mcp build` は型付き build の確認用です
+- Web UI を同時に起動している場合、background scheduler は Web 側が担当します
+- MCP 単独で使う場合は、task 変更後に `scheduler_run` を呼ぶと current schedule を即時更新できます
 
 ## リポジトリ構成
 

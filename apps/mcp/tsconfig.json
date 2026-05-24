@@ -1,12 +1,30 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "./dist"
+    "rootDir": "../..",
+    "outDir": "./dist",
+    "baseUrl": "../..",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@task-platform/application": [
+        "packages/application/src/index.ts"
+      ],
+      "@task-platform/contracts": [
+        "packages/contracts/src/index.ts"
+      ],
+      "@task-platform/domain": [
+        "packages/domain/src/index.ts"
+      ],
+      "@task-platform/infrastructure": [
+        "packages/infrastructure/src/index.ts"
+      ]
+    }
   },
   "include": [
     "src/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "../../packages/*/src/**/*.ts"
   ],
   "exclude": [
     "dist"

@@ -31,6 +31,9 @@ describe("createMcpServer", () => {
         mutations: [],
         runs: [],
       }),
+      runSchedulerTick: async () => ({
+        scheduled: true,
+      }),
     });
 
     const toolNames = Object.keys((server as unknown as { _registeredTools: Record<string, unknown> })._registeredTools);
@@ -49,6 +52,7 @@ describe("createMcpServer", () => {
     expect(toolNames).toContain("scheduler_status_get");
     expect(toolNames).toContain("scheduler_delay");
     expect(toolNames).toContain("scheduler_logs_list");
+    expect(toolNames).toContain("scheduler_run");
   });
 
   it("exposes richer planning fields in MCP tool schemas", () => {
@@ -87,6 +91,9 @@ describe("createMcpServer", () => {
       listSchedulerLogs: async () => ({
         mutations: [],
         runs: [],
+      }),
+      runSchedulerTick: async () => ({
+        scheduled: true,
       }),
     });
 
@@ -167,6 +174,9 @@ describe("createMcpServer", () => {
       listSchedulerLogs: async () => ({
         mutations: [],
         runs: [],
+      }),
+      runSchedulerTick: async () => ({
+        scheduled: true,
       }),
     });
 

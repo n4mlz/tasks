@@ -46,6 +46,7 @@ export function createMcpServer(deps: {
   getSchedulerStatus(): Promise<unknown>;
   postponeScheduler(input: { delayMilliseconds: number }): Promise<void>;
   listSchedulerLogs(): Promise<unknown>;
+  runSchedulerTick(input?: { force?: boolean }): Promise<unknown>;
 }) {
   const server = new McpServer({
     name: "task-platform-mcp",
@@ -240,6 +241,19 @@ export function createMcpServer(deps: {
     },
     async () => ({
       content: [{ type: "text", text: JSON.stringify(await deps.listSchedulerLogs()) }],
+    }),
+  );
+
+  server.registerTool(
+    "scheduler_run",
+    {
+      description: "Run scheduling immediately. Useful when MCP is used without the web background scheduler.",
+      inputSchema: {
+        force: z.boolean().default(true),
+      },
+    },
+    async (input) => ({
+      content: [{ type: "text", text: JSON.stringify(await deps.runSchedulerTick({ force: input.force })) }],
     }),
   );
 

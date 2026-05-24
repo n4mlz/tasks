@@ -57,9 +57,15 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
+      '@task-platform/application':
+        specifier: workspace:*
+        version: link:../../packages/application
       '@task-platform/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@task-platform/infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/infrastructure
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -163,8 +169,6 @@ importers:
       better-sqlite3:
         specifier: ^12.4.1
         version: 12.9.0
-
-  packages/scheduler: {}
 
 packages:
 

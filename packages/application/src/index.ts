@@ -1,6 +1,7 @@
 export * from "./ports";
 export * from "./schedule-window";
 export * from "./recompute-schedule";
+export { createPlanningIntelligence } from "./planning-intelligence";
 export { createTaskUseCase } from "./use-cases/create-task";
 export { deleteTaskUseCase } from "./use-cases/delete-task";
 export { updateTaskUseCase } from "./use-cases/update-task";

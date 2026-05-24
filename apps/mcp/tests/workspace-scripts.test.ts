@@ -13,4 +13,14 @@ describe("workspace scripts", () => {
     expect(packageJson.scripts?.dev).toContain("pnpm dev:web");
     expect(packageJson.scripts?.dev).toContain("pnpm dev:mcp");
   });
+
+  it("defines runnable MCP scripts for stdio clients", () => {
+    const packageJsonPath = fileURLToPath(new URL("../package.json", import.meta.url));
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.dev).toContain("src/main.ts");
+    expect(packageJson.scripts?.start).toBe("node --import tsx src/main.ts");
+  });
 });
