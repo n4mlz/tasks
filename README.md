@@ -1,105 +1,73 @@
 # Task Platform
 
-Task Platform は、個人のタスク管理を `考える面` と `進める面` に分けるための Web ファーストな個人用基盤です。  
-思いついた task を `Inbox` に入れ、各日の余力時間と締切をもとにスケジュールし、毎日は `今日` だけ見て進めることを目的にしています。
+Task Platform は、個人のタスク管理を `考える面` と `進める面` に分けるための Web ファーストな個人用基盤です。
 
-## 目的
+- 思いついた task は `Inbox` に逃がす
+- 日ごとの余力時間を先に決める
+- LLM で task の性質を推定する
+- 自動再配分で current schedule を更新する
+- 毎日は `今日` だけ見て進める
 
-多くの task 管理では、登録した後の
-
-- 今日は何を進めるべきか
-- 期限までに安全か
-- 余力時間と残り見積もりは釣り合っているか
-
-を結局ユーザーが頭の中で考え続ける必要があります。
-
-このリポジトリは、その認知負荷を減らすために次を目指しています。
-
-- 思いついた task をすぐ外に出す
-- 各日の余力時間を Web で管理する
-- task の性質を LLM に推定させる
-- スケジュールの再配分をシステム側で行う
-- 毎日の実行時は `今日` だけ見ればよい状態に近づける
-
-## 現在の構成
-
-このプロジェクトでは、LLM の役割を 2 つに分けています。
-
-- `MCP`
-  - 外部エージェントが app の状態を読む/更新するための面です。
-  - OpenClaw や Hermes Agent が task の進み具合、余力時間、metrics を確認する用途を想定しています。
-- `app 内部 LLM`
-  - app 自身が task の性質推定と再配分に使う面です。
-  - `.env` で指定した OpenAI 互換 endpoint、または OpenAI / Anthropic provider に接続できます。
-
-つまり、
-
-- `LLM -> app` は MCP
-- `app -> LLM` は内部 planner
-
-という分離です。
+現状の中心は Next.js Web UI です。MCP はすでに tool 定義を持っていますが、`main` 時点では stdio transport の起動配線までは入っていません。
 
 ## できること
 
-現時点では次が動きます。
+現在の `main` で確認できる機能は次です。
 
 - `Inbox` で task を追加する
-- task 追加後、落ち着いたタイミングで LLM によって
-  - `taskType`
-  - `cognitiveLoad`
-  - `energy`
-  - `tags`
-  を推定する
-- 推定結果を使って current schedule を自動再計算する
-- task のタイトル、必要な時間、期限、状態、メモを更新する
+- task のタイトル、残り時間、期限、メモ、完了状態を更新する
 - task を削除する
-- 日ごとの余力時間を月カレンダー上で編集する
-- `今日` 画面から作業記録を入力する
-- `最後に再配分した時刻` と `次回あと何分で再配分するか` を見る
-- `ログ` 画面で変更履歴と再配分履歴を見る
-- `今日` と `計画` で current schedule と基本 metrics を見る
-- `ダッシュボード` で週次と task 別の推移を見る
-- MCP tools から task / capacity / metrics / current schedule / planning health にアクセスする
-- `Today` から、今日に割り当たっていない active task の作業記録も入れる
+- task 追加後や更新後に、LLM が `taskType` `cognitiveLoad` `energy` `tags` を推定する
+- 推定結果と期限、余力時間をもとに current schedule を自動再計算する
+- `計画` 画面の月カレンダーで日ごとの余力時間を編集する
+- `今日` 画面から、今日の task と今日に割り当たっていない active task の両方に対して作業記録を入れる
+- `ダッシュボード` で直近 8 週間の予定時間 / 実績時間、および task ごとの週次推移を見る
+- `ログ` で変更履歴と scheduler 実行履歴を見る
+- `planning health` で直近 7 日の余力時間不足や capacity 未設定日を確認する
+- `3分延長` と `今すぐ再配分` で scheduler を制御する
 
 ## 画面
 
-Web UI は現在 5 画面です。
+現在の Web UI は 5 画面です。
 
 - `今日` (`/`)
-  - 今日の task 列を見る画面です。
-  - `作業記録` モーダルから、進めた時間と残り時間を入力できます。
-  - `他の task を記録` から、今日に割り当たっていない active task も記録できます。
+  - 今日の task 列を表示します
+  - 予定時間、実績時間、当日バッファ使用量、計画の有無を見られます
+  - `作業記録` と `他の task を記録` から実績を入れます
 - `Inbox` (`/inbox`)
-  - task を追加する画面です。
-  - 既存 task の編集と削除もここで行えます。
+  - task を追加します
+  - 既存 task の編集と削除も行います
 - `計画` (`/week`)
-  - 月カレンダーで日ごとの余力時間を編集します。
-  - 横には task 一覧、残り時間、進捗率、見込み配分が出ます。
+  - 月カレンダーで日ごとの余力時間を編集します
+  - task ごとの残り時間、実績、進捗率、配分見込みを見ます
 - `ダッシュボード` (`/dashboard`)
-  - 直近 8 週間の `予定時間 / 実績時間` を週次で見ます。
-  - task を 1 つ選び、その task の週次推移も見られます。
+  - 直近 8 週間の `予定時間 / 実績時間` を週次で見ます
+  - 任意 task の週次推移も見られます
 - `ログ` (`/logs`)
-  - 何を変更したか、いつ自動再配分が走ったかを見る画面です。
-  - 検証エラーや再配分理由もここで確認できます。
+  - mutation log と scheduler run log を確認します
 
-`提案` 画面はありません。  
-以前の proposal 承認フローは廃止し、`一定時間変更が止まった後に自動で再配分する` 方式に置き換えています。
+proposal 承認フロー専用画面はありません。変更が落ち着いた後に自動再配分する方式です。
 
-## リポジトリ構成
+## アーキテクチャ
 
-```text
-apps/
-  mcp/   # MCP server
-  web/   # Next.js Web UI
-packages/
-  application/
-  contracts/
-  domain/
-  infrastructure/
-docs/
-  superpowers/
-```
+このリポジトリは pnpm workspace 上の TypeScript modular monolith です。
+
+- `apps/web`
+  - Next.js 16 / React 19 の Web UI
+  - SQLite を直接使う service facade と API route を持ちます
+- `apps/mcp`
+  - MCP server の tool 定義
+  - 現時点では `createMcpServer(...)` の factory までで、transport bootstrap は未実装です
+- `packages/domain`
+  - task / capacity / schedule のドメインルール
+- `packages/application`
+  - use case 群
+- `packages/infrastructure`
+  - SQLite repository、migration、workspace path 解決
+- `packages/contracts`
+  - Web と MCP で使う schema 群
+
+Web UI と MCP は同じ application/domain を共有する前提です。
 
 ## セットアップ
 
@@ -120,27 +88,77 @@ pnpm install
 pnpm dev
 ```
 
-個別起動もできます。
+これは `web` と `mcp` の両方を並列で起動します。
 
 ```bash
 pnpm dev:web
 pnpm dev:mcp
 ```
 
-通常、Web UI は `http://localhost:3000` で開きます。
+Web UI は通常 `http://localhost:3000` で開きます。
 
-### DB
+補足:
 
-SQLite ファイルはデフォルトでリポジトリ直下の `task-platform.db` に作られます。  
+- `pnpm dev:web` は `next dev`
+- `pnpm dev:mcp` は `tsx watch src/server.ts`
+- ただし `apps/mcp/src/server.ts` は現状 server factory のみなので、`main` では MCP transport 自体はまだ外部接続用に起動しません
+
+### Docker Compose
+
+`.env` をリポジトリ直下に置いたうえで、次で一式起動できます。
+
+```bash
+docker compose up --build
+```
+
+Compose は単一サービスで `pnpm dev` を実行し、`web` と `mcp` を同じコンテナで起動します。
+
+Web UI はデフォルトで `http://localhost:3000` に公開されます。ポートを変えたい場合は `PORT` を指定します。
+
+```bash
+PORT=3001 docker compose up --build
+```
+
+SQLite はデフォルトで Compose volume 上の `/data/task-platform.db` に保存されます。保存先を変えたい場合は `TASK_PLATFORM_DB` を指定します。
+
+```bash
+TASK_PLATFORM_DB=/data/custom-task-platform.db docker compose up --build
+```
+
+Compose は `.env` を `env_file` として読み込み、`TASK_PLATFORM_LLM_*` もそのままコンテナへ渡します。
+
+## スクリプト
+
+ルート `package.json` にある主要スクリプトは次です。
+
+```bash
+pnpm dev
+pnpm dev:web
+pnpm dev:mcp
+pnpm build
+pnpm test
+pnpm test:domain
+pnpm lint
+```
+
+現状の `lint` は formatter ではなく TypeScript build check (`tsc -b --pretty false`) です。
+
+## 永続化
+
+SQLite ファイルはデフォルトでリポジトリ直下の `task-platform.db` に作られます。
 変更したい場合は `TASK_PLATFORM_DB` を指定します。
 
 ```bash
 TASK_PLATFORM_DB=/tmp/task-platform.db pnpm dev
 ```
 
+相対パスを指定した場合は workspace root から解決されます。
+
 ## LLM 設定
 
-app 内部 planner は、次の環境変数で provider を切り替えます。
+planner は `.env` と `.env.local` を workspace root から読み込みます。すでに process に入っている環境変数は上書きしません。
+
+利用する環境変数:
 
 - `TASK_PLATFORM_LLM_PROVIDER`
   - `openai-compatible`
@@ -148,14 +166,14 @@ app 内部 planner は、次の環境変数で provider を切り替えます。
   - `anthropic`
 - `TASK_PLATFORM_LLM_MODEL`
 - `TASK_PLATFORM_LLM_BASE_URL`
-  - `openai-compatible` のときに使用
+  - `openai-compatible` のときに必須
 - `TASK_PLATFORM_LLM_API_KEY`
 - `TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS`
   - `true` / `false`
 - `TASK_PLATFORM_LLM_TIMEOUT_MS`
-  - 自動再配分で内部 LLM を待つ最大時間
+  - 既定値は `20000`
 
-### ローカル OpenAI 互換 LLM の例
+### 例: ローカル OpenAI 互換 endpoint
 
 ```bash
 TASK_PLATFORM_LLM_PROVIDER=openai-compatible
@@ -166,142 +184,109 @@ TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS=true
 TASK_PLATFORM_LLM_TIMEOUT_MS=20000
 ```
 
-この設定で、自動再配分時にローカル LLM へ structured output を要求します。  
-structured output が使えない provider では plain JSON 形式に切り替えて推論します。  
-推論に失敗した場合は `再配分失敗` として記録し、簡易推定にはフォールバックしません。
+LLM が未設定なら task 分析は失敗として扱われ、簡易ヒューリスティックへのフォールバックはしません。
+
+## scheduler の動き
+
+現在の scheduler は Web server 内でバックグラウンド実行されます。
+
+- relevant mutation が入ると pending になります
+- 最後の変更から 3 分経つと再配分対象になります
+- `taskPlatform.runSchedulerTick()` は 30 秒ごとに background interval から呼ばれます
+- `3分延長` は次回実行時刻を後ろにずらします
+- `今すぐ再配分` は強制 tick を投げます
+
+capacity の扱いは次です。
+
+- 各日の `availableMinutes` はその日に task に使ってよい最大時間です
+- scheduler は原則としてその 80% を通常予算、残りを reserve として扱います
+- 通常予算内で収まるなら reserve を残し、必要なときだけ使います
 
 ## 最初の使い方
 
 最小フローは次です。
 
-1. `計画` で日ごとの余力時間を入れる
+1. `計画` で今月の余力時間を入れる
 2. `Inbox` で task を追加する
-3. 変更が止まると自動再配分を待つ
+3. 変更が落ち着いて自動再配分されるのを待つ
 4. `今日` でその日の task を進める
 5. 作業後に `作業記録` を入れる
-6. `ダッシュボード` で週次や task 別の進み方を見る
-7. `ログ` で変更履歴と再配分履歴を見る
+6. `ダッシュボード` で進み方を見る
+7. `ログ` で何が起きたか確認する
 
-## 運用イメージ
+## Web API
 
-### task を追加する
+Web UI が使う主な route は次です。
 
-`Inbox` では次を入力します。
+- `POST /api/tasks`
+  - task 作成
+- `PATCH /api/tasks/:taskId`
+  - task 更新
+- `POST /api/tasks/:taskId`
+  - form submit 用の task 更新
+- `POST /api/tasks/:taskId/delete`
+  - task 削除
+- `POST /api/tasks/:taskId/log-work`
+  - 作業記録
+- `POST /api/capacity`
+  - 余力時間更新
+- `GET /api/planning-health`
+  - planning health 取得
+- `GET /api/planning-month?referenceDate=YYYY-MM-DD`
+  - 月カレンダー描画用 payload 取得
+- `GET /api/scheduler/status`
+  - scheduler 状態取得
+- `POST /api/scheduler/delay`
+  - 次回再配分を 3 分延長
+- `POST /api/scheduler/tick`
+  - 強制再配分
 
-- タイトル
-- 必要な時間
-- 期限
-- メモ
+`POST` route の多くは `application/json` と `formData` の両方を受けます。
 
-その後 `追加` を押すと、
+## MCP
 
-- 変更が保存され
-- 一定時間変更が止まると task の性質推定
-- current schedule の再計算
-- 必要時間・期限・余力時間に矛盾がないかの validation
+`apps/mcp` には現在、次の tool が定義されています。
 
-をバックグラウンドで行います。
-
-### 余力時間を入れる
-
-`計画` 画面の月カレンダーから日付を押すと、その日の余力時間をモーダルで編集できます。  
-ここで入れる値は、`その日に task に使える最大時間` です。
-
-変更後はすぐに重い推論をせず、最後の変更から 3 分以上経ってから自動再配分します。
-必要なら header の `3分延長` から次回実行を後ろにずらせます。
-
-### 作業を記録する
-
-`今日` 画面の `作業記録` から、
-
-- 進めた時間
-- 残り時間
-- 完了扱いにするか
-
-を入力できます。  
-保存後は変更履歴に積まれ、落ち着いたタイミングで自動再配分されます。
-
-その日に割り当たっていない task を進めた場合でも、`他の task を記録` から記録できます。  
-未完了なら `remainingMinutesAfter` が更新され、次回の自動再配分で残り作業として持ち越されます。
-
-### 自動再配分
-
-自動再配分は即時ではなく、次の条件で走ります。
-
-- 何らかの変更が入っている
-- 最後の変更から 3 分以上経過している
-- その変更 revision に対してまだ再配分していない
-
-各日の `availableMinutes` は、その日に task に使ってよい最大時間です。  
-scheduler は原則としてその 80% を通常予算、残り 20% をバッファとして扱います。通常予算内で収まる限りはバッファを残し、期限や総量の都合で必要なときだけバッファを使います。
-
-再配分中にさらに変更が入った場合、その実行結果は current schedule に採用せず、`再実行待ち` のまま次の tick に回します。
-
-### ログ
-
-`ログ` 画面では次を確認できます。
-
-- task 追加、編集、削除
-- 余力時間の編集
-- 作業記録の追加
-- 自動再配分の実行履歴
-- 検証エラーや実行エラー
-
-## ダッシュボード
-
-`ダッシュボード` では、入力や再配分ではなく、進み方の傾向を確認します。
-
-- `週次`
-  - 直近 8 週間の `予定時間` と `実績時間` を並べて表示します。
-  - 今週の予定、実績、達成率、完了 task 数も確認できます。
-- `タスク別`
-  - task を 1 つ選び、その task の直近 8 週間の `予定時間` と `実績時間` を見ます。
-  - 全体時間、残り時間、進捗率、期限、累計実績も確認できます。
-
-## MCP 連携
-
-MCP は外部エージェントが app の状態を読む/操作するための面です。  
-現在の tool は次です。
-
-- task
-  - `task_create`
-  - `tasks_list`
+- `task_create`
+- `tasks_list`
 - `task_update`
 - `task_delete`
 - `task_log_work`
 - `work_logs_list`
-- capacity
-  - `capacity_get`
-  - `capacity_set`
-- schedule
-  - `schedule_get_current`
-- metrics
-  - `metrics_get`
+- `capacity_get`
+- `capacity_set`
+- `schedule_get_current`
+- `metrics_get`
 - `planning_health_get`
-  - `scheduler_status_get`
-  - `scheduler_delay`
-  - `scheduler_logs_list`
+- `scheduler_status_get`
+- `scheduler_delay`
+- `scheduler_logs_list`
 
-### 想定用途
+注意:
 
-- Hermes Agent が task の増減や進み具合を確認する
-- OpenClaw が metrics を読み、日次/週次の振り返りを支援する
-- エージェントが `capacity` や task 更新を補助する
+- これらの tool schema と server registration は [apps/mcp/src/server.ts](/home/noname/me/workspace/personal/tasks/apps/mcp/src/server.ts:1) にあります
+- `main` 時点では stdio transport や実行 bootstrap がないため、README 上で「MCP server がそのまま接続可能」とは書いていません
 
-MCP 側は監視面・操作面であり、task 性質推定や自動再配分そのものは app 内部 LLM が担当します。
+## リポジトリ構成
 
-## 開発用コマンド
-
-```bash
-pnpm test
-pnpm --filter mcp build
-pnpm --filter web build
+```text
+apps/
+  mcp/
+  web/
+packages/
+  application/
+  contracts/
+  domain/
+  infrastructure/
+docs/
+  superpowers/
 ```
 
-補足として、`web build` では `workspace-path.ts` 起因の NFT trace warning が出ることがありますが、現状 build 自体は通ります。
+## テストと補助ドキュメント
 
-## 補足
+テストは `vitest` です。
 
-詳細な設計メモは以下を参照してください。
+- 全体: `pnpm test`
+- domain のみ: `pnpm test:domain`
 
-- [docs/superpowers/specs/2026-04-27-task-platform-design.md](docs/superpowers/specs/2026-04-27-task-platform-design.md)
+設計の背景は [docs/superpowers/specs/2026-04-27-task-platform-design.md](/home/noname/me/workspace/personal/tasks/docs/superpowers/specs/2026-04-27-task-platform-design.md:1) にあります。

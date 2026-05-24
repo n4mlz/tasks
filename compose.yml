@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: pnpm dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${PORT:-3000}
+      TASK_PLATFORM_DB: ${TASK_PLATFORM_DB:-/data/task-platform.db}
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - task-platform-data:/data
+
+volumes:
+  task-platform-data:

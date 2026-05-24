@@ -9,7 +9,11 @@
     "test:domain": "vitest --run packages/domain/tests",
     "lint": "tsc -b --pretty false",
     "dev:web": "pnpm --filter web dev",
-    "dev:mcp": "pnpm --filter mcp dev"
+    "dev:mcp": "pnpm --filter mcp dev",
+    "verify:dockerfile": "test -f Dockerfile",
+    "verify:compose": "test -f compose.yml",
+    "verify:docker-docs": "rg -n \"docker compose up --build|PORT=3001 docker compose up --build|TASK_PLATFORM_DB\" README.md",
+    "verify:docker": "pnpm verify:dockerfile && pnpm verify:compose && pnpm verify:docker-docs"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

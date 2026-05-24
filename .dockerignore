@@ -1,0 +1,10 @@
+.git
+.next
+.worktrees
+.env
+.env.local
+.env.*.local
+dist
+node_modules
+*.db
+apps/web/.next
