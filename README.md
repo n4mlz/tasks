@@ -113,7 +113,7 @@ docker compose up --build
 
 Compose は単一サービスで `pnpm dev` を実行し、`web` と `mcp` を同じコンテナで起動します。
 
-Web UI はデフォルトで `http://localhost:3000` に公開されます。ポートを変えたい場合は `PORT` を指定します。
+Web UI はデフォルトで `http://localhost:3000` に公開されます。Compose の port publish は `127.0.0.1` に絞っているので、ホスト外の interface には公開しません。ポートを変えたい場合は `PORT` を指定します。
 
 ```bash
 PORT=3001 docker compose up --build

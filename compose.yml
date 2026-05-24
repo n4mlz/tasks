@@ -12,7 +12,7 @@ services:
       PORT: ${PORT:-3000}
       TASK_PLATFORM_DB: ${TASK_PLATFORM_DB:-/data/task-platform.db}
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     volumes:
       - task-platform-data:/data
 
