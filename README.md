@@ -145,6 +145,8 @@ WEB_PUBLISH_HOST=0.0.0.0 MCP_PUBLISH_HOST=0.0.0.0 docker compose up --build
 
 公開サーバーでは raw HTTP のまま開けるより、reverse proxy 越しに HTTPS 化することを推奨します。MCP 側は `TASK_PLATFORM_MCP_ALLOWED_HOSTS` で host header を絞れます。
 
+`pnpm dev` は Next.js dev server を使うので、別マシンから Web UI を開く場合は dev resource の origin 許可も必要です。必要なら `.env` に `ALLOWED_DEV_ORIGINS=wisteria,100.79.204.14` のように設定してください。
+
 ## スクリプト
 
 ルート `package.json` にある主要スクリプトは次です。

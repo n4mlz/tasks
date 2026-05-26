@@ -147,6 +147,7 @@ export function createHttpApp(options: LaunchOptions) {
 
       const server = createRuntimeMcpServer();
       let transport: StreamableHTTPServerTransport;
+      let sessionClosed = false;
       transport = new StreamableHTTPServerTransport({
         enableJsonResponse: true,
         sessionIdGenerator: () => randomUUID(),
@@ -156,11 +157,12 @@ export function createHttpApp(options: LaunchOptions) {
       });
 
       transport.onclose = () => {
+        if (sessionClosed) return;
+        sessionClosed = true;
         const activeSessionId = transport.sessionId;
         if (activeSessionId) {
           sessions.delete(activeSessionId);
         }
-        void server.close();
       };
 
       await server.connect(transport);
