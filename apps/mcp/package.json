@@ -14,9 +14,10 @@
     "tsx": "^4.21.0"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch src/main.ts --transport=http",
     "build": "tsc -p tsconfig.json",
-    "start": "node --import tsx src/main.ts",
+    "start": "node --import tsx src/main.ts --transport=stdio",
+    "start:http": "node --import tsx src/main.ts --transport=http",
     "test": "pnpm --dir ../.. exec vitest --run apps/mcp/tests"
   }
 }

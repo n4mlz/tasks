@@ -20,7 +20,8 @@ describe("workspace scripts", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.dev).toContain("src/main.ts");
-    expect(packageJson.scripts?.start).toBe("node --import tsx src/main.ts");
+    expect(packageJson.scripts?.dev).toContain("--transport=http");
+    expect(packageJson.scripts?.start).toContain("--transport=stdio");
+    expect(packageJson.scripts?.["start:http"]).toContain("--transport=http");
   });
 });

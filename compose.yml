@@ -11,8 +11,13 @@ services:
       HOST: 0.0.0.0
       PORT: ${PORT:-3000}
       TASK_PLATFORM_DB: ${TASK_PLATFORM_DB:-/data/task-platform.db}
+      TASK_PLATFORM_MCP_HOST: ${TASK_PLATFORM_MCP_HOST:-0.0.0.0}
+      TASK_PLATFORM_MCP_PORT: ${MCP_PORT:-3100}
+      TASK_PLATFORM_MCP_PATH: ${TASK_PLATFORM_MCP_PATH:-/mcp}
+      TASK_PLATFORM_MCP_ALLOWED_HOSTS: ${TASK_PLATFORM_MCP_ALLOWED_HOSTS:-}
     ports:
-      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
+      - "${WEB_PUBLISH_HOST:-0.0.0.0}:${PORT:-3000}:${PORT:-3000}"
+      - "${MCP_PUBLISH_HOST:-0.0.0.0}:${MCP_PORT:-3100}:${MCP_PORT:-3100}"
     volumes:
       - task-platform-data:/data
 
