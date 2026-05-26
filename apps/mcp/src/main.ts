@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Server } from "node:http";
 import { pathToFileURL } from "node:url";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -147,6 +148,7 @@ export function createHttpApp(options: LaunchOptions) {
       const server = createRuntimeMcpServer();
       let transport: StreamableHTTPServerTransport;
       transport = new StreamableHTTPServerTransport({
+        enableJsonResponse: true,
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (initializedSessionId) => {
           sessions.set(initializedSessionId, { server, transport });
@@ -220,17 +222,61 @@ export async function startStdioServer() {
   await server.connect(transport);
 }
 
-export async function startHttpServer(options: LaunchOptions) {
+export async function listenHttpServer(options: LaunchOptions): Promise<Server> {
   const { app } = createHttpApp(options);
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<Server>((resolve, reject) => {
     const listener = app.listen(options.port, options.host, () => {
+      listener.ref();
+      const address = listener.address();
+      const resolvedPort =
+        address && typeof address === "object" ? address.port : options.port;
       console.log(
-        `Task Platform MCP HTTP listening on http://${options.host}:${options.port}${options.path}`,
+        `Task Platform MCP HTTP listening on http://${options.host}:${resolvedPort}${options.path}`,
       );
-      resolve();
+      resolve(listener);
     });
     listener.on("error", reject);
+  });
+}
+
+async function closeHttpServer(listener: Server) {
+  await new Promise<void>((resolve, reject) => {
+    listener.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+export async function startHttpServer(options: LaunchOptions) {
+  const listener = await listenHttpServer(options);
+
+  await new Promise<void>((resolve, reject) => {
+    let closed = false;
+
+    const shutdown = async () => {
+      if (closed) return;
+      closed = true;
+      process.off("SIGINT", handleSignal);
+      process.off("SIGTERM", handleSignal);
+      try {
+        await closeHttpServer(listener);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+
+    const handleSignal = () => {
+      void shutdown();
+    };
+
+    process.once("SIGINT", handleSignal);
+    process.once("SIGTERM", handleSignal);
   });
 }
 
