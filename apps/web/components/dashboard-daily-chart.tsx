@@ -54,7 +54,7 @@ export function DashboardDailyChart({
     label,
   }: {
     active?: boolean;
-    payload?: { name: string; value: number }[];
+    payload?: readonly { name: string; value: number }[];
     label?: string;
   }) => {
     if (!active || !payload?.length) return null;
@@ -108,7 +108,7 @@ export function DashboardDailyChart({
         axisLine={false}
       />
       <YAxis tickLine={false} axisLine={false} />
-      <Tooltip content={customTooltip as React.ComponentProps<typeof Tooltip>["content"]} />
+      <Tooltip content={customTooltip} />
       <Bar dataKey="plannedHours" fill="#cbd5e1" radius={[6, 6, 0, 0]} />
       <Bar dataKey="actualHours" fill="#0f172a" radius={[6, 6, 0, 0]} />
     </BarChart>
