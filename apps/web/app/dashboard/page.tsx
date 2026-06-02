@@ -4,17 +4,33 @@ import { taskPlatform } from "../../lib/task-platform";
 
 export const dynamic = "force-dynamic";
 
+function getMondayOfWeek(date: Date): string {
+  const d = new Date(date);
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function DashboardPage(props: {
-  searchParams?: Promise<{ taskId?: string }>;
+  searchParams?: Promise<{ taskId?: string; week?: string }>;
 } = {}) {
   const searchParams = (await props.searchParams) ?? {};
-  const weeklySummary = (await taskPlatform.getDashboardWeeklySummary()) as Array<{
-    weekStart: string;
-    plannedMinutes: number;
-    actualMinutes: number;
-    completedTaskCount: number;
-    completionRate: number;
-  }>;
+  const today = new Date();
+  const weekStart = searchParams.week ?? getMondayOfWeek(today);
+  const dailySummary = (await taskPlatform.getDashboardDailySummary({ weekStart })) as {
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+    weekTotals: {
+      plannedMinutes: number;
+      actualMinutes: number;
+      completionRate: number;
+      completedTaskCount: number;
+    };
+  };
   const allTasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
     title: string;
@@ -51,7 +67,12 @@ export default async function DashboardPage(props: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">ダッシュボード</h1>
       </div>
-      <DashboardTabs weeklySummary={weeklySummary} tasks={tasks} selectedTask={selectedTask} />
+      <DashboardTabs
+        dailySummary={dailySummary}
+        tasks={tasks}
+        selectedTask={selectedTask}
+        initialWeekStart={weekStart}
+      />
     </section>
   );
 }
