@@ -54,7 +54,7 @@ function latestSchedulableDate(task: Task, today: string): string | null {
 }
 
 export function sliceToSchedulePlan(input: {
-  slices: ScheduledSlice[];
+  slices: Array<{ taskId: string; date: string; plannedMinutes: number; kind?: ScheduledSlice["kind"] }>;
   today: string;
   tasks: Task[];
   capacities: DayCapacity[];
@@ -63,8 +63,14 @@ export function sliceToSchedulePlan(input: {
   const taskById = new Map(input.tasks.map((task) => [task.id, task]));
   const unscheduledTaskIds = new Set(input.tasks.map((t) => t.id));
   const riskFlags: string[] = [];
+  const normalizedSlices: ScheduledSlice[] = input.slices.map((s) => ({
+    taskId: s.taskId,
+    date: s.date,
+    plannedMinutes: s.plannedMinutes,
+    kind: s.kind ?? "focus",
+  }));
 
-  for (const slice of input.slices) {
+  for (const slice of normalizedSlices) {
     unscheduledTaskIds.delete(slice.taskId);
   }
 
@@ -75,7 +81,7 @@ export function sliceToSchedulePlan(input: {
   for (const capacity of input.capacities) {
     const usable = usableMinutesForDay(capacity);
     const base = baseMinutesForDay(capacity);
-    const dayPlanned = input.slices
+    const dayPlanned = normalizedSlices
       .filter((s) => s.date === capacity.date)
       .reduce((sum, s) => sum + s.plannedMinutes, 0);
     capacityPressureByDate[capacity.date] = usable > 0 ? dayPlanned / usable : 0;
@@ -95,7 +101,7 @@ export function sliceToSchedulePlan(input: {
     horizonEnd: input.capacities.length > 0
       ? input.capacities[input.capacities.length - 1].date
       : input.today,
-    slices: input.slices,
+    slices: normalizedSlices,
     riskFlags,
     summary: {
       riskFlags,
@@ -109,7 +115,7 @@ export function sliceToSchedulePlan(input: {
 }
 
 export function validateSlices(input: {
-  slices: ScheduledSlice[];
+  slices: Array<{ taskId: string; date: string; plannedMinutes: number }>;
   tasks: Task[];
   capacities: DayCapacity[];
 }): ScheduleValidationResult {

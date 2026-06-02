@@ -150,6 +150,9 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       async analyzeSchedule() {
         throw new Error(fallbackReason ?? "ローカル LLM が未設定です。");
       },
+      async correctSchedule() {
+        throw new Error(fallbackReason ?? "ローカル LLM が未設定です。");
+      },
     };
   }
   const resolvedModel = model;
