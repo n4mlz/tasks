@@ -105,7 +105,7 @@ type TaskPlatform = {
   } | string[]) => Promise<unknown>;
   getSchedulerStatus: () => Promise<unknown>;
   postponeScheduler: (input: { delayMilliseconds: number }) => Promise<void>;
-  listSchedulerLogs: () => Promise<unknown>;
+  listSchedulerLogs: (input?: { cursor?: string; limit?: number }) => Promise<unknown>;
   runSchedulerTick: (input?: { force?: boolean }) => Promise<unknown>;
 };
 
@@ -319,10 +319,13 @@ function getTaskPlatform(): TaskPlatform {
         input,
       );
     },
-    async listSchedulerLogs() {
-      return listSchedulerLogsUseCase({
-        schedulerStateRepository,
-      });
+    async listSchedulerLogs(input?: { cursor?: string; limit?: number }) {
+      return listSchedulerLogsUseCase(
+        {
+          schedulerStateRepository,
+        },
+        input,
+      );
     },
     async runSchedulerTick(input) {
       return runSchedulerTickUseCase({
