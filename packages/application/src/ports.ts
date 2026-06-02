@@ -177,6 +177,21 @@ export interface DashboardRepository {
     header: DashboardTaskHeader;
     buckets: DashboardTaskBucket[];
   }>;
+  getDailySummary(input: {
+    weekStart: string;
+  }): Promise<{
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+    weekTotals: {
+      plannedMinutes: number;
+      actualMinutes: number;
+      completionRate: number;
+      completedTaskCount: number;
+    };
+  }>;
 }
 
 export interface IdGenerator {
