@@ -129,6 +129,8 @@ export async function runSchedulerTickUseCase(
       recentMutations,
     });
 
+    console.log("[scheduler] LLM analysis completed. slices:", analysis.slices.length, "rationale:", analysis.rationale);
+
     const annotationByTaskId = new Map(analysis.annotations.map((annotation) => [annotation.taskId, annotation]));
     const annotatedTasks = tasks.map((task) => {
       const annotation = annotationByTaskId.get(task.id);
@@ -152,8 +154,11 @@ export async function runSchedulerTickUseCase(
     let rationale = analysis.rationale;
     let sliceValidation = validateSlices({ slices, tasks: annotatedTasks, capacities });
 
+    console.log("[scheduler] initial validateSlices:", { valid: sliceValidation.isValid, errors: sliceValidation.errors });
+
     for (let attempt = 0; !sliceValidation.isValid && attempt < 2; attempt++) {
       try {
+        console.log("[scheduler] correction attempt", attempt + 1, "errors:", sliceValidation.errors);
         const correction = await deps.planningIntelligence.correctSchedule({
           tasks: annotatedTasks,
           capacities,
@@ -165,6 +170,7 @@ export async function runSchedulerTickUseCase(
         slices = correction.slices;
         rationale = correction.rationale;
         sliceValidation = validateSlices({ slices, tasks: annotatedTasks, capacities });
+        console.log("[scheduler] correction result:", { valid: sliceValidation.isValid, slices: correction.slices.length, errors: sliceValidation.errors });
       } catch {
         break;
       }
@@ -173,6 +179,7 @@ export async function runSchedulerTickUseCase(
     let plan: ReturnType<typeof buildSchedulePlan> | ReturnType<typeof sliceToSchedulePlan>;
 
     if (sliceValidation.isValid) {
+      console.log("[scheduler] using LLM slices, count:", slices.length);
       plan = sliceToSchedulePlan({
         slices,
         today: deps.clock.today(),
@@ -181,6 +188,7 @@ export async function runSchedulerTickUseCase(
         rationale,
       });
     } else {
+      console.log("[scheduler] falling back to buildSchedulePlan, slices invalid:", sliceValidation.errors);
       plan = buildSchedulePlan({
         today: deps.clock.today(),
         tasks: annotatedTasks,
