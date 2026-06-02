@@ -235,7 +235,19 @@ export interface PlanningIntelligence {
       energy: Task["energy"];
       tags: string[];
     }>;
-    priorityOrder: string[];
+    slices: Array<{ taskId: string; date: string; plannedMinutes: number }>;
+    rationale: string;
+  }>;
+
+  correctSchedule(input: {
+    tasks: import("@task-platform/domain").Task[];
+    capacities: import("@task-platform/domain").DayCapacity[];
+    horizonStart: string;
+    horizonEnd: string;
+    previousSlices: Array<{ taskId: string; date: string; plannedMinutes: number }>;
+    errors: string[];
+  }): Promise<{
+    slices: Array<{ taskId: string; date: string; plannedMinutes: number }>;
     rationale: string;
   }>;
 }
