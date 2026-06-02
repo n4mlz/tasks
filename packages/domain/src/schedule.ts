@@ -49,7 +49,6 @@ function latestSchedulableDate(task: Task, today: string): string | null {
   }
 
   const value = new Date(`${task.dueDate}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() - 1);
   return value.toISOString().slice(0, 10);
 }
 
