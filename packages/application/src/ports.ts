@@ -195,6 +195,16 @@ export interface DashboardRepository {
       completedTaskCount: number;
     };
   }>;
+  getTaskDailySummary(input: {
+    taskId: string;
+    weekStart: string;
+  }): Promise<{
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+  }>;
 }
 
 export interface IdGenerator {

@@ -3,7 +3,6 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 import { MetricCard } from "./metric-card";
-import { DashboardTaskChart } from "./dashboard-task-chart";
 import { DashboardDailyChart } from "./dashboard-daily-chart";
 import { TaskSelector } from "./task-selector";
 import { formatHoursFromMinutes } from "../lib/presentation";
@@ -30,6 +29,7 @@ export function DashboardTabs({
   dailySummary,
   tasks,
   selectedTask,
+  selectedTaskDaily,
   initialWeekStart,
 }: Readonly<{
   dailySummary: {
@@ -58,6 +58,13 @@ export function DashboardTabs({
     };
     buckets: Array<{
       weekStart: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+  } | null;
+  selectedTaskDaily: {
+    days: Array<{
+      date: string;
       plannedMinutes: number;
       actualMinutes: number;
     }>;
@@ -118,36 +125,37 @@ export function DashboardTabs({
         </button>
       </div>
 
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => navigateWeek(-1)}
+          className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+        >
+          &larr; 前週
+        </button>
+        <span className="text-sm font-medium text-slate-700">
+          {formatWeekRange(weekStart)}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={goToToday}
+            className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            今日
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateWeek(1)}
+            className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            次週 &rarr;
+          </button>
+        </div>
+      </div>
+
       {activeTab === "weekly" ? (
         <div role="tabpanel" className="grid gap-4">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => navigateWeek(-1)}
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              &larr; 前週
-            </button>
-            <span className="text-sm font-medium text-slate-700">
-              {formatWeekRange(weekStart)}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={goToToday}
-                className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                今日
-              </button>
-              <button
-                type="button"
-                onClick={() => navigateWeek(1)}
-                className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                次週 &rarr;
-              </button>
-            </div>
-          </div>
           <DashboardDailyChart data={dailySummary.days} />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricTile label="今週の予定" value={formatHoursFromMinutes(totals.plannedMinutes)} />
@@ -166,7 +174,7 @@ export function DashboardTabs({
           ) : null}
           {selectedTask ? (
             <>
-              <DashboardTaskChart data={selectedTask.buckets} />
+              <DashboardDailyChart data={selectedTaskDaily?.days ?? []} />
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <MetricTile
                   label="全体"

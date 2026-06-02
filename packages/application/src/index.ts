@@ -16,3 +16,4 @@ export { runSchedulerTickUseCase } from "./use-cases/run-scheduler-tick";
 export { getDashboardWeeklySummaryUseCase } from "./use-cases/get-dashboard-weekly-summary";
 export { getDashboardDailySummaryUseCase } from "./use-cases/get-dashboard-daily-summary";
 export { getDashboardTaskTimelineUseCase } from "./use-cases/get-dashboard-task-timeline";
+export { getDashboardTaskDailySummaryUseCase } from "./use-cases/get-dashboard-task-daily-summary";

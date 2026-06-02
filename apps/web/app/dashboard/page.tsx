@@ -61,6 +61,15 @@ export default async function DashboardPage(props: {
         }>;
       })
     : null;
+  const selectedTaskDaily = selectedTaskId
+    ? ((await taskPlatform.getDashboardTaskDailySummary({ taskId: selectedTaskId, weekStart })) as {
+        days: Array<{
+          date: string;
+          plannedMinutes: number;
+          actualMinutes: number;
+        }>;
+      })
+    : null;
 
   return (
     <section className="grid gap-4">
@@ -71,6 +80,7 @@ export default async function DashboardPage(props: {
         dailySummary={dailySummary}
         tasks={tasks}
         selectedTask={selectedTask}
+        selectedTaskDaily={selectedTaskDaily}
         initialWeekStart={weekStart}
       />
     </section>

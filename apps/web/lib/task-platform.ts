@@ -4,6 +4,7 @@ import {
   createTaskUseCase,
   deleteTaskUseCase,
   getDashboardDailySummaryUseCase,
+  getDashboardTaskDailySummaryUseCase,
   getDashboardTaskTimelineUseCase,
   getDashboardWeeklySummaryUseCase,
   getMetricsUseCase,
@@ -97,6 +98,7 @@ type TaskPlatform = {
   getDashboardWeeklySummary: () => Promise<unknown>;
   getDashboardDailySummary: (input: { weekStart: string }) => Promise<unknown>;
   getDashboardTaskTimeline: (taskId: string) => Promise<unknown>;
+  getDashboardTaskDailySummary: (input: { taskId: string; weekStart: string }) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
   getWorkLogs: (input: {
     taskIds?: string[];
@@ -286,6 +288,13 @@ function getTaskPlatform(): TaskPlatform {
         dashboardRepository,
         taskId,
         today: clock.today(),
+      });
+    },
+    async getDashboardTaskDailySummary(input: { taskId: string; weekStart: string }) {
+      return getDashboardTaskDailySummaryUseCase({
+        dashboardRepository,
+        taskId: input.taskId,
+        weekStart: input.weekStart,
       });
     },
     async getPlanningHealth() {

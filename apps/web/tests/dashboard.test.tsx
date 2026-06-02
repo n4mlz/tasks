@@ -8,6 +8,7 @@ const { taskPlatformMock } = vi.hoisted(() => ({
   taskPlatformMock: {
     getDashboardDailySummary: vi.fn(),
     getDashboardTaskTimeline: vi.fn(),
+    getDashboardTaskDailySummary: vi.fn(),
     listTasks: vi.fn(),
   },
 }));
@@ -63,6 +64,17 @@ describe("DashboardPage", () => {
         { weekStart: "2026-03-23", plannedMinutes: 60, actualMinutes: 120 },
       ],
     });
+    taskPlatformMock.getDashboardTaskDailySummary.mockResolvedValue({
+      days: [
+        { date: "2026-06-01", plannedMinutes: 180, actualMinutes: 120 },
+        { date: "2026-06-02", plannedMinutes: 120, actualMinutes: 90 },
+        { date: "2026-06-03", plannedMinutes: 60, actualMinutes: 0 },
+        { date: "2026-06-04", plannedMinutes: 0, actualMinutes: 0 },
+        { date: "2026-06-05", plannedMinutes: 0, actualMinutes: 0 },
+        { date: "2026-06-06", plannedMinutes: 0, actualMinutes: 0 },
+        { date: "2026-06-07", plannedMinutes: 0, actualMinutes: 0 },
+      ],
+    });
     taskPlatformMock.listTasks.mockResolvedValue([{ id: "task-1", title: "Crypto 予習" }]);
   });
 
@@ -94,6 +106,5 @@ describe("DashboardPage", () => {
     expect(screen.getByText("全体")).toBeInTheDocument();
     expect(screen.getByText("残り")).toBeInTheDocument();
     expect(screen.getByText("累計実績")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-task-chart-frame")).toHaveClass("min-h-72", "min-w-0");
   });
 });

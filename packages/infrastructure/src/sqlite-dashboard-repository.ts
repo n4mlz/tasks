@@ -340,4 +340,67 @@ export class SqliteDashboardRepository {
       },
     };
   }
+
+  async getTaskDailySummary(input: {
+    taskId: string;
+    weekStart: string;
+  }): Promise<{
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+  }> {
+    const dateFrom = input.weekStart;
+    const dateTo = addDays(dateFrom, 6);
+
+    const plannedRows = this.db
+      .prepare(
+        `
+          SELECT
+            s.date,
+            COALESCE(SUM(s.planned_minutes), 0) AS minutes
+          FROM scheduled_task_slices s
+          WHERE s.proposal_id = (
+            SELECT active_proposal_id
+            FROM schedule_snapshots
+            ORDER BY updated_at DESC
+            LIMIT 1
+          )
+            AND s.task_id = ?
+            AND s.date >= ?
+            AND s.date <= ?
+          GROUP BY s.date
+          ORDER BY s.date
+        `,
+      )
+      .all(input.taskId, dateFrom, dateTo) as Array<{ date: string; minutes: number }>;
+
+    const actualRows = this.db
+      .prepare(
+        `
+          SELECT
+            date,
+            COALESCE(SUM(spent_minutes), 0) AS minutes
+          FROM task_work_logs
+          WHERE task_id = ?
+            AND date >= ?
+            AND date <= ?
+          GROUP BY date
+          ORDER BY date
+        `,
+      )
+      .all(input.taskId, dateFrom, dateTo) as Array<{ date: string; minutes: number }>;
+
+    const plannedMap = new Map(plannedRows.map((r) => [r.date, Number(r.minutes)]));
+    const actualMap = new Map(actualRows.map((r) => [r.date, Number(r.minutes)]));
+
+    const days = Array.from({ length: 7 }, (_, i) => ({
+      date: addDays(dateFrom, i),
+      plannedMinutes: plannedMap.get(addDays(dateFrom, i)) ?? 0,
+      actualMinutes: actualMap.get(addDays(dateFrom, i)) ?? 0,
+    }));
+
+    return { days };
+  }
 }
