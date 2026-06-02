@@ -19,7 +19,7 @@ RUN pnpm install --frozen-lockfile \
   --network-concurrency=1
 
 COPY . .
-RUN pnpm build
+RUN pnpm --filter web build
 
 FROM base AS runner
 COPY --from=builder /app/apps/web/.next/standalone ./
