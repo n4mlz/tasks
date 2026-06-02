@@ -25,9 +25,15 @@ const taskShapeSchema = z.object({
   tags: z.array(z.string().min(1)).max(6),
 });
 
+const taskSliceSchema = z.object({
+  taskId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  plannedMinutes: z.number().int().positive().max(480),
+});
+
 const plannerOutputSchema = z.object({
   annotations: z.array(taskShapeSchema),
-  priorityOrder: z.array(z.string().min(1)),
+  slices: z.array(taskSliceSchema).max(200),
   rationale: z.string().min(1),
 });
 
@@ -153,12 +159,27 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       const system = [
         "あなたは個人の task planning assistant です。",
         "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
-        "priorityOrder は scheduling の優先順です。締切、残り時間、負荷の偏りを見て並べてください。",
-        "高負荷 task を同じ日に詰め込みすぎない意図で優先順を作ってください。",
-        "tags は人が読める日本語にしてください。",
+        "さらに、各 task を指定された horizon 期間の日ごとに slices として配分してください。",
+        "",
+        "## 配分のルール",
+        "1. 各タスクの notes に書かれた配分の希望を必ず守ってください。",
+        "   - 「毎日コツコツ」「毎日少しずつ」→ 毎日少量ずつ均等に配分",
+        "   - 「週末にまとめて」「休日に」→ 週末（土日）に集中配分",
+        "   - 「一気に」「まとめて」→ 1-2日に集中配分",
+        "2. 各タスクの remainingHours を可能な限りスケジュール期間内にすべて割り当ててください。",
+        "   割り当てが不足する場合は rationale に理由を書いてください。",
+        "3. 各日の capacity(hours) を超えないでください。",
+        "4. 期限 (dueDate) を過ぎた日には配分しないでください。dueDate 当日は配分可能です。",
+        "5. plannedMinutes は 15 分単位 (15, 30, 45, 60, 90, 120, ...) で指定してください。",
+        "6. 高負荷 (cognitiveLoad: high) タスクは1日に詰め込みすぎないでください。",
+        "7. 1タスクあたり1日の最小配分は30分、最大は480分（8時間）としてください。",
+        "8. tags は人が読める日本語にしてください。",
       ].join("\n");
+      const dateStrings = input.capacities.map((c) => c.date).sort();
       const payload = {
         today: input.today,
+        horizonStart: dateStrings.length > 0 ? dateStrings[0] : input.today,
+        horizonEnd: dateStrings.length > 0 ? dateStrings.at(-1) : input.today,
         tasks: input.tasks.map((task) => ({
           id: task.id,
           title: task.title,
@@ -190,7 +211,9 @@ export function createPlanningIntelligence(): PlanningIntelligence {
               tags: ["string"],
             },
           ],
-          priorityOrder: ["taskId"],
+          slices: [
+            { taskId: "string", date: "YYYY-MM-DD", plannedMinutes: 60 },
+          ],
           rationale: "string",
         }),
         "Input JSON:",
@@ -230,7 +253,7 @@ export function createPlanningIntelligence(): PlanningIntelligence {
           : await runPlainJson();
         return {
           annotations: output.annotations,
-          priorityOrder: output.priorityOrder,
+          slices: output.slices,
           rationale: output.rationale,
         };
       } catch (error) {
@@ -245,7 +268,7 @@ export function createPlanningIntelligence(): PlanningIntelligence {
             const output = await runPlainJson();
             return {
               annotations: output.annotations,
-              priorityOrder: output.priorityOrder,
+              slices: output.slices,
               rationale: output.rationale,
             };
           } catch (retryError) {
@@ -258,6 +281,57 @@ export function createPlanningIntelligence(): PlanningIntelligence {
         }
 
         throw new Error(`LLM 推論に失敗しました: ${message}`);
+      }
+    },
+    async correctSchedule(input) {
+      const correctionPrompt = [
+        "あなたが出力した配分に以下の問題がありました。修正してください。",
+        "",
+        "## 問題点",
+        ...input.errors.map((e) => `- ${e}`),
+        "",
+        "## 前回の配分",
+        JSON.stringify(input.previousSlices, null, 2),
+        "",
+        "## コンテキスト",
+        JSON.stringify({
+          horizonStart: input.horizonStart,
+          horizonEnd: input.horizonEnd,
+          capacities: input.capacities.map((c) => ({
+            date: c.date,
+            hours: Number((c.availableMinutes / 60).toFixed(2)),
+          })),
+        }, null, 2),
+        "",
+        "## 修正後の配分のみを JSON で返してください。markdown や説明文は不要です。",
+        "JSON schema:",
+        JSON.stringify({
+          slices: [
+            { taskId: "string", date: "YYYY-MM-DD", plannedMinutes: 60 },
+          ],
+          rationale: "string",
+        }),
+      ].join("\n");
+
+      const correctionSchema = z.object({
+        slices: z.array(taskSliceSchema).max(200),
+        rationale: z.string().min(1),
+      });
+
+      try {
+        const { text } = await generateText({
+          model: resolvedModel,
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          prompt: correctionPrompt,
+        });
+        const parsed = correctionSchema.safeParse(JSON.parse(text));
+        if (!parsed.success) {
+          throw new Error(`修正 JSON の検証に失敗しました: ${parsed.error.message}`);
+        }
+        return parsed.data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "LLM 修正に失敗しました。";
+        throw new Error(`LLM 修正に失敗しました: ${message}`);
       }
     },
   };
