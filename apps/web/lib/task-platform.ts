@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   createTaskUseCase,
   deleteTaskUseCase,
+  getDashboardDailySummaryUseCase,
   getDashboardTaskTimelineUseCase,
   getDashboardWeeklySummaryUseCase,
   getMetricsUseCase,
@@ -94,6 +95,7 @@ type TaskPlatform = {
   getCurrentSchedule: () => Promise<unknown>;
   getMetrics: (dateFrom?: string, dateTo?: string) => Promise<unknown>;
   getDashboardWeeklySummary: () => Promise<unknown>;
+  getDashboardDailySummary: (input: { weekStart: string }) => Promise<unknown>;
   getDashboardTaskTimeline: (taskId: string) => Promise<unknown>;
   getPlanningHealth: () => Promise<unknown>;
   getWorkLogs: (input: {
@@ -271,6 +273,12 @@ function getTaskPlatform(): TaskPlatform {
       return getDashboardWeeklySummaryUseCase({
         dashboardRepository,
         today: clock.today(),
+      });
+    },
+    async getDashboardDailySummary(input: { weekStart: string }) {
+      return getDashboardDailySummaryUseCase({
+        dashboardRepository,
+        weekStart: input.weekStart,
       });
     },
     async getDashboardTaskTimeline(taskId: string) {
