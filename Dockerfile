@@ -1,9 +1,8 @@
-FROM node:22-bookworm-slim
-
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
-
 RUN corepack enable
 
+FROM base AS builder
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json vitest.config.ts vitest.workspace.ts ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/mcp/package.json apps/mcp/package.json
@@ -20,7 +19,17 @@ RUN pnpm install --frozen-lockfile \
   --network-concurrency=1
 
 COPY . .
+RUN pnpm build
 
-EXPOSE 3000
+FROM base AS runner
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/mcp ./apps/mcp
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json /app/pnpm-workspace.yaml ./
 
-CMD ["pnpm", "dev"]
+EXPOSE 3000 3100
+ENV HOST=0.0.0.0
+ENV PORT=3000
+CMD ["sh", "-c", "node apps/web/server.js & node --import tsx apps/mcp/src/main.ts --transport=http & wait"]

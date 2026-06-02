@@ -11,6 +11,7 @@ function parseAllowedDevOrigins(raw: string | undefined): string[] | undefined {
 }
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   allowedDevOrigins: parseAllowedDevOrigins(process.env.ALLOWED_DEV_ORIGINS),
   turbopack: {
     root: path.resolve(__dirname, "../.."),
