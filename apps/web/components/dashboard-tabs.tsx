@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import React from "react";
 import { MetricCard } from "./metric-card";
 import { DashboardTaskChart } from "./dashboard-task-chart";
@@ -64,28 +65,23 @@ export function DashboardTabs({
   initialWeekStart: string;
 }>) {
   const [activeTab, setActiveTab] = React.useState<"weekly" | "task">("weekly");
-  const [weekStart, setWeekStart] = React.useState(initialWeekStart);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const weekStart = searchParams.get("week") ?? initialWeekStart;
 
   function navigateWeek(direction: -1 | 1) {
-    setWeekStart((prev) => {
-      const d = new Date(`${prev}T00:00:00.000Z`);
-      d.setUTCDate(d.getUTCDate() + direction * 7);
-      return d.toISOString().slice(0, 10);
-    });
+    const d = new Date(`${weekStart}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + direction * 7);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("week", d.toISOString().slice(0, 10));
+    router.push(`/dashboard?${params.toString()}`);
   }
 
   function goToToday() {
-    const today = new Date();
-    const day = today.getUTCDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    today.setUTCDate(today.getUTCDate() + diff);
-    setWeekStart(today.toISOString().slice(0, 10));
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("week");
+    router.push(params.size > 0 ? `/dashboard?${params.toString()}` : "/dashboard");
   }
-
-  const handleWeekChange = React.useCallback(
-    (direction: -1 | 1) => () => navigateWeek(direction),
-    [],
-  );
 
   const totals = dailySummary.weekTotals;
 
@@ -127,7 +123,7 @@ export function DashboardTabs({
           <div className="flex items-center justify-between">
             <button
               type="button"
-              onClick={handleWeekChange(-1)}
+              onClick={() => navigateWeek(-1)}
               className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
             >
               &larr; 前週
@@ -145,7 +141,7 @@ export function DashboardTabs({
               </button>
               <button
                 type="button"
-                onClick={handleWeekChange(1)}
+                onClick={() => navigateWeek(1)}
                 className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 次週 &rarr;
