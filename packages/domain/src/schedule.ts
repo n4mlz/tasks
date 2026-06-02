@@ -45,7 +45,7 @@ function latestSchedulableDate(task: Task, today: string): string | null {
   }
 
   if (task.dueDate <= today) {
-    return today;
+    return null;
   }
 
   const value = new Date(`${task.dueDate}T00:00:00.000Z`);
