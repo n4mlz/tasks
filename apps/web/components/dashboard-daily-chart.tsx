@@ -36,8 +36,7 @@ export function DashboardDailyChart({
   }>;
 }>) {
   const chartData = data.map((entry, index) => ({
-    dateLabel: formatDateLabel(entry.date),
-    dayLabel: DAY_LABELS[index],
+    label: `${formatDateLabel(entry.date)} (${DAY_LABELS[index]})`,
     plannedHours: Number((entry.plannedMinutes / 60).toFixed(2)),
     actualHours: Number((entry.actualMinutes / 60).toFixed(2)),
   }));
@@ -48,43 +47,6 @@ export function DashboardDailyChart({
     (d) => d.plannedHours > 0 || d.actualHours > 0,
   );
 
-  const customTooltip = ({
-    active,
-    payload,
-    label,
-  }: {
-    active?: boolean;
-    payload?: readonly { name: string; value: number }[];
-    label?: string;
-  }) => {
-    if (!active || !payload?.length) return null;
-    const entry = chartData.find(
-      (d) => d.dateLabel === label || d.dayLabel === label,
-    );
-    const displayLabel = entry
-      ? `${entry.dateLabel} (${entry.dayLabel})`
-      : label;
-    return (
-      <div
-        style={{
-          background: "white",
-          border: "1px solid #e2e8f0",
-          borderRadius: "8px",
-          padding: "8px 12px",
-          fontSize: "13px",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "4px" }}>{displayLabel}</div>
-        {payload.map((p) => (
-          <div key={p.name} style={{ color: "#475569" }}>
-            {p.name === "plannedHours" ? "計画" : "実績"}:{" "}
-            {formatTooltipHours(p.value)}
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const chart = (
     <BarChart
       data={chartData}
@@ -93,22 +55,30 @@ export function DashboardDailyChart({
     >
       <CartesianGrid vertical={false} strokeDasharray="3 3" />
       <XAxis
-        dataKey="dateLabel"
-        tick={({ x, y, payload, index }) => (
-          <g transform={`translate(${x},${y})`}>
-            <text x={0} y={0} dy={10} textAnchor="middle" fontSize={11} fill="#475569">
-              {payload.value}
-            </text>
-            <text x={0} y={0} dy={26} textAnchor="middle" fontSize={10} fill="#94a3b8">
-              {chartData[index]?.dayLabel}
-            </text>
-          </g>
-        )}
+        dataKey="label"
+        tick={({ x, y, payload }) => {
+          const parts = payload.value?.toString().split(" (") ?? [];
+          const datePart = parts[0] ?? "";
+          const dayPart = parts[1]?.replace(")", "") ?? "";
+          return (
+            <g transform={`translate(${x},${y})`}>
+              <text x={0} y={0} dy={10} textAnchor="middle" fontSize={11} fill="#475569">
+                {datePart}
+              </text>
+              <text x={0} y={0} dy={26} textAnchor="middle" fontSize={10} fill="#94a3b8">
+                {dayPart}
+              </text>
+            </g>
+          );
+        }}
         tickLine={false}
         axisLine={false}
       />
       <YAxis tickLine={false} axisLine={false} />
-      <Tooltip content={customTooltip} />
+      <Tooltip
+        formatter={(value) => formatTooltipHours(value)}
+        labelFormatter={(label) => `${label} 週`}
+      />
       <Bar dataKey="plannedHours" fill="#cbd5e1" radius={[6, 6, 0, 0]} />
       <Bar dataKey="actualHours" fill="#0f172a" radius={[6, 6, 0, 0]} />
     </BarChart>
