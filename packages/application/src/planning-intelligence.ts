@@ -287,11 +287,31 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       }
     },
     async correctSchedule(input) {
+      function translateError(e: string): string {
+        const parts = e.split(":");
+        const code = parts[0];
+        switch (code) {
+          case "unknown_task":
+            return `タスクID「${parts[1]}」は存在しません。削除してください。`;
+          case "out_of_horizon":
+            return `タスク「${parts[1]}」の日付 ${parts[2]} はスケジュール期間外です。期間内の日付に変更してください。`;
+          case "non_positive":
+            return `タスク「${parts[1]}」の ${parts[2]} の配分時間が 0 以下です。正の値にしてください。`;
+          case "past_due":
+            return `タスク「${parts[1]}」の日付 ${parts[2]} は期限切れです。期限前の日付に変更してください。`;
+          case "over_remaining":
+            return `タスク「${parts[1]}」の合計配分時間 ${parts[2]} 分が残り時間 ${parts[3]} 分を超えています。残り時間以内に収めてください。`;
+          case "over_capacity":
+            return `日付 ${parts[1]} の配分合計 ${parts[2]} 分が利用可能時間 ${parts[3]} 分を超えています。収まるように減らしてください。`;
+          default:
+            return e;
+        }
+      }
       const correctionPrompt = [
         "あなたが出力した配分に以下の問題がありました。修正してください。",
         "",
         "## 問題点",
-        ...input.errors.map((e) => `- ${e}`),
+        ...input.errors.map((e) => `- ${translateError(e)}`),
         "",
         "## 前回の配分",
         JSON.stringify(input.previousSlices, null, 2),
