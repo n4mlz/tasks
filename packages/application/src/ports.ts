@@ -68,6 +68,17 @@ export interface SchedulerStateRepository {
     delayMilliseconds: number;
     debounceMilliseconds: number;
   }): Promise<void>;
+  listMutations(limit?: number): Promise<
+    Array<{
+      id: string;
+      revision: number;
+      mutationKind: string;
+      entityType: string;
+      entityId: string | null;
+      createdAt: string;
+      details: Record<string, unknown>;
+    }>
+  >;
   listRuns(input?: {
     cursor?: string;
     limit?: number;
