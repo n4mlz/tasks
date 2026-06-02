@@ -31,7 +31,7 @@ export function usableMinutesForDay(capacity: DayCapacity): number {
   return Math.max(capacity.availableMinutes - capacity.bufferMinutes, 0);
 }
 
-function baseMinutesForDay(capacity: DayCapacity): number {
+export function baseMinutesForDay(capacity: DayCapacity): number {
   return Math.floor(usableMinutesForDay(capacity) * 0.8);
 }
 
@@ -51,6 +51,115 @@ function latestSchedulableDate(task: Task, today: string): string | null {
   const value = new Date(`${task.dueDate}T00:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() - 1);
   return value.toISOString().slice(0, 10);
+}
+
+export function sliceToSchedulePlan(input: {
+  slices: ScheduledSlice[];
+  today: string;
+  tasks: Task[];
+  capacities: DayCapacity[];
+  rationale: string;
+}): DomainSchedulePlan {
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
+  const unscheduledTaskIds = new Set(input.tasks.map((t) => t.id));
+  const riskFlags: string[] = [];
+
+  for (const slice of input.slices) {
+    unscheduledTaskIds.delete(slice.taskId);
+  }
+
+  const capacityPressureByDate: Record<string, number> = {};
+  const bufferUsageByDate: Record<string, number> = {};
+  const datesUsingReserve: string[] = [];
+
+  for (const capacity of input.capacities) {
+    const usable = usableMinutesForDay(capacity);
+    const base = baseMinutesForDay(capacity);
+    const dayPlanned = input.slices
+      .filter((s) => s.date === capacity.date)
+      .reduce((sum, s) => sum + s.plannedMinutes, 0);
+    capacityPressureByDate[capacity.date] = usable > 0 ? dayPlanned / usable : 0;
+    bufferUsageByDate[capacity.date] = dayPlanned > base ? dayPlanned - base : 0;
+    if (dayPlanned > base) {
+      datesUsingReserve.push(capacity.date);
+    }
+  }
+
+  const unarr = [...unscheduledTaskIds];
+  for (const id of unarr) {
+    riskFlags.push(`${id}:unscheduled`);
+  }
+
+  return {
+    horizonStart: input.today,
+    horizonEnd: input.capacities.length > 0
+      ? input.capacities[input.capacities.length - 1].date
+      : input.today,
+    slices: input.slices,
+    riskFlags,
+    summary: {
+      riskFlags,
+      unscheduledTaskIds: unarr,
+      capacityPressureByDate,
+      bufferUsageByDate,
+      datesUsingReserve,
+      insufficientEvenWithReserve: unarr.length > 0,
+    },
+  };
+}
+
+export function validateSlices(input: {
+  slices: ScheduledSlice[];
+  tasks: Task[];
+  capacities: DayCapacity[];
+}): ScheduleValidationResult {
+  const errors: string[] = [];
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
+  const capacityByDate = new Map(
+    input.capacities.map((c) => [c.date, usableMinutesForDay(c)]),
+  );
+  const taskTotals = new Map<string, number>();
+  const dayTotals = new Map<string, number>();
+
+  for (const slice of input.slices) {
+    const task = taskById.get(slice.taskId);
+    if (!task) {
+      errors.push(`unknown_task:${slice.taskId}`);
+      continue;
+    }
+
+    if (!capacityByDate.has(slice.date)) {
+      errors.push(`out_of_horizon:${slice.taskId}:${slice.date}`);
+    }
+
+    if (slice.plannedMinutes <= 0) {
+      errors.push(`non_positive:${slice.taskId}:${slice.date}`);
+    }
+
+    const latestDate = latestSchedulableDate(task, input.capacities[0]?.date ?? "");
+    if (latestDate && slice.date > latestDate) {
+      errors.push(`past_due:${slice.taskId}:${slice.date}`);
+    }
+
+    taskTotals.set(slice.taskId, (taskTotals.get(slice.taskId) ?? 0) + slice.plannedMinutes);
+    dayTotals.set(slice.date, (dayTotals.get(slice.date) ?? 0) + slice.plannedMinutes);
+  }
+
+  for (const task of input.tasks) {
+    const total = taskTotals.get(task.id) ?? 0;
+    if (total > task.remainingMinutes) {
+      errors.push(`over_remaining:${task.id}:${total}:${task.remainingMinutes}`);
+    }
+  }
+
+  for (const [date, planned] of dayTotals.entries()) {
+    const usable = capacityByDate.get(date) ?? 0;
+    if (planned > usable) {
+      errors.push(`over_capacity:${date}:${planned}:${usable}`);
+    }
+  }
+
+  return { isValid: errors.length === 0, errors };
 }
 
 function burdenScore(task: Task): number {
