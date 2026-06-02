@@ -271,8 +271,12 @@ describe("runSchedulerTickUseCase", () => {
                 tags: ["頭使う", "執筆系"],
               },
             ],
-            priorityOrder: ["task_1"],
+            slices: [{ taskId: "task_1", date: "2026-04-27", plannedMinutes: 120 }],
             rationale: "締切と負荷から優先しました。",
+          }),
+          correctSchedule: vi.fn().mockResolvedValue({
+            slices: [{ taskId: "task_1", date: "2026-04-27", plannedMinutes: 120 }],
+            rationale: "fixed",
           }),
         },
         clock: {
@@ -422,8 +426,12 @@ describe("runSchedulerTickUseCase", () => {
         planningIntelligence: {
           analyzeSchedule: vi.fn().mockResolvedValue({
             annotations: [],
-            priorityOrder: ["task_1"],
+            slices: [{ taskId: "task_1", date: "2026-04-27", plannedMinutes: 60 }],
             rationale: "forced rerun",
+          }),
+          correctSchedule: vi.fn().mockResolvedValue({
+            slices: [{ taskId: "task_1", date: "2026-04-27", plannedMinutes: 60 }],
+            rationale: "fixed",
           }),
         },
         clock: {

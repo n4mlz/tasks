@@ -1,4 +1,4 @@
-import { buildSchedulePlan, validateSchedulePlan } from "@task-platform/domain";
+import { buildSchedulePlan, sliceToSchedulePlan, validateSchedulePlan, validateSlices } from "@task-platform/domain";
 import type {
   CapacityRepository,
   Clock,
@@ -148,12 +148,47 @@ export async function runSchedulerTickUseCase(
       await deps.taskRepository.save(task);
     }
 
-    const plan = buildSchedulePlan({
-      today: deps.clock.today(),
-      tasks: annotatedTasks,
-      capacities,
-      priorityOrder: dedupePriorityOrder(analysis.priorityOrder),
-    });
+    let slices = analysis.slices;
+    let rationale = analysis.rationale;
+    let sliceValidation = validateSlices({ slices, tasks: annotatedTasks, capacities });
+
+    for (let attempt = 0; !sliceValidation.isValid && attempt < 2; attempt++) {
+      try {
+        const correction = await deps.planningIntelligence.correctSchedule({
+          tasks: annotatedTasks,
+          capacities,
+          horizonStart: horizon.start,
+          horizonEnd: horizon.end,
+          previousSlices: slices,
+          errors: sliceValidation.errors,
+        });
+        slices = correction.slices;
+        rationale = correction.rationale;
+        sliceValidation = validateSlices({ slices, tasks: annotatedTasks, capacities });
+      } catch {
+        break;
+      }
+    }
+
+    let plan: ReturnType<typeof buildSchedulePlan> | ReturnType<typeof sliceToSchedulePlan>;
+
+    if (sliceValidation.isValid) {
+      plan = sliceToSchedulePlan({
+        slices,
+        today: deps.clock.today(),
+        tasks: annotatedTasks,
+        capacities,
+        rationale,
+      });
+    } else {
+      plan = buildSchedulePlan({
+        today: deps.clock.today(),
+        tasks: annotatedTasks,
+        capacities,
+        priorityOrder: dedupePriorityOrder(slices.map((s) => s.taskId)),
+      });
+    }
+
     const validation = validateSchedulePlan({
       plan,
       tasks: annotatedTasks,
@@ -168,7 +203,7 @@ export async function runSchedulerTickUseCase(
         reason: "validation_failed",
         startedAt: now,
         finishedAt: deps.clock.now(),
-        rationale: analysis.rationale,
+        rationale: rationale,
         validation: {
           isValid: false,
           errors: validation.errors,
@@ -200,7 +235,7 @@ export async function runSchedulerTickUseCase(
         reason: "newer_mutation_arrived",
         startedAt: now,
         finishedAt: deps.clock.now(),
-        rationale: analysis.rationale,
+        rationale: rationale,
         validation: {
           isValid: true,
           errors: [],
@@ -236,7 +271,7 @@ export async function runSchedulerTickUseCase(
       reason: "polling_tick",
       startedAt: now,
       finishedAt: deps.clock.now(),
-      rationale: analysis.rationale,
+      rationale: rationale,
       validation: {
         isValid: true,
         errors: [],

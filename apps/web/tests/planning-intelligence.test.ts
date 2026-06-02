@@ -36,7 +36,7 @@ describe("createPlanningIntelligence", () => {
       .mockResolvedValue({
         text: JSON.stringify({
           annotations: [],
-          priorityOrder: [],
+          slices: [],
           rationale: "plain json",
         }),
       });
@@ -81,7 +81,7 @@ describe("createPlanningIntelligence", () => {
       .mockResolvedValueOnce({
         text: JSON.stringify({
           annotations: [],
-          priorityOrder: [],
+          slices: [],
           rationale: "retry plain json",
         }),
       });
