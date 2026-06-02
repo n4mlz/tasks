@@ -251,4 +251,93 @@ export class SqliteDashboardRepository {
       })),
     };
   }
+
+  async getDailySummary(input: {
+    weekStart: string;
+  }): Promise<{
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+    weekTotals: {
+      plannedMinutes: number;
+      actualMinutes: number;
+      completionRate: number;
+      completedTaskCount: number;
+    };
+  }> {
+    const dateFrom = input.weekStart;
+    const dateTo = addDays(dateFrom, 6);
+
+    const plannedRows = this.db
+      .prepare(
+        `
+          SELECT
+            s.date,
+            COALESCE(SUM(s.planned_minutes), 0) AS minutes
+          FROM scheduled_task_slices s
+          WHERE s.proposal_id = (
+            SELECT active_proposal_id
+            FROM schedule_snapshots
+            ORDER BY updated_at DESC
+            LIMIT 1
+          )
+            AND s.date >= ?
+            AND s.date <= ?
+          GROUP BY s.date
+          ORDER BY s.date
+        `,
+      )
+      .all(dateFrom, dateTo) as Array<{ date: string; minutes: number }>;
+
+    const actualRows = this.db
+      .prepare(
+        `
+          SELECT
+            date,
+            COALESCE(SUM(spent_minutes), 0) AS minutes
+          FROM task_work_logs
+          WHERE date >= ?
+            AND date <= ?
+          GROUP BY date
+          ORDER BY date
+        `,
+      )
+      .all(dateFrom, dateTo) as Array<{ date: string; minutes: number }>;
+
+    const completedCount = this.db
+      .prepare(
+        `
+          SELECT COUNT(DISTINCT task_id) AS count
+          FROM task_work_logs
+          WHERE date >= ?
+            AND date <= ?
+            AND remaining_minutes_after = 0
+        `,
+      )
+      .get(dateFrom, dateTo) as { count: number };
+
+    const plannedMap = new Map(plannedRows.map((r) => [r.date, Number(r.minutes)]));
+    const actualMap = new Map(actualRows.map((r) => [r.date, Number(r.minutes)]));
+
+    const days = Array.from({ length: 7 }, (_, i) => ({
+      date: addDays(dateFrom, i),
+      plannedMinutes: plannedMap.get(addDays(dateFrom, i)) ?? 0,
+      actualMinutes: actualMap.get(addDays(dateFrom, i)) ?? 0,
+    }));
+
+    const totalPlanned = days.reduce((sum, d) => sum + d.plannedMinutes, 0);
+    const totalActual = days.reduce((sum, d) => sum + d.actualMinutes, 0);
+
+    return {
+      days,
+      weekTotals: {
+        plannedMinutes: totalPlanned,
+        actualMinutes: totalActual,
+        completionRate: totalPlanned === 0 ? 0 : totalActual / totalPlanned,
+        completedTaskCount: Number(completedCount.count),
+      },
+    };
+  }
 }
