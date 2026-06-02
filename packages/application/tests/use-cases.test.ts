@@ -530,15 +530,13 @@ describe("status and logs use cases", () => {
     expect(status.latestRunAt).toBe("2026-04-27T11:59:30.000Z");
   });
 
-  it("returns combined scheduler logs", async () => {
+  it("returns scheduler runs with default limit", async () => {
     const logs = await listSchedulerLogsUseCase({
       schedulerStateRepository: {
-        listMutations: vi.fn().mockResolvedValue([{ id: "m1" }]),
         listRuns: vi.fn().mockResolvedValue([{ id: "r1" }]),
       },
     });
 
-    expect(logs.mutations).toHaveLength(1);
     expect(logs.runs).toHaveLength(1);
   });
 });

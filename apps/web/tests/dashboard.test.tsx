@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { taskPlatformMock } = vi.hoisted(() => ({
   taskPlatformMock: {
-    getDashboardWeeklySummary: vi.fn(),
+    getDashboardDailySummary: vi.fn(),
     getDashboardTaskTimeline: vi.fn(),
     listTasks: vi.fn(),
   },
@@ -31,22 +31,23 @@ describe("DashboardPage", () => {
   });
 
   beforeEach(() => {
-    taskPlatformMock.getDashboardWeeklySummary.mockResolvedValue([
-      {
-        weekStart: "2026-03-16",
-        plannedMinutes: 600,
-        actualMinutes: 480,
-        completedTaskCount: 3,
-        completionRate: 0.8,
-      },
-      {
-        weekStart: "2026-03-23",
-        plannedMinutes: 420,
-        actualMinutes: 240,
+    taskPlatformMock.getDashboardDailySummary.mockResolvedValue({
+      days: [
+        { date: "2026-06-01", plannedMinutes: 180, actualMinutes: 120 },
+        { date: "2026-06-02", plannedMinutes: 120, actualMinutes: 90 },
+        { date: "2026-06-03", plannedMinutes: 240, actualMinutes: 0 },
+        { date: "2026-06-04", plannedMinutes: 60, actualMinutes: 0 },
+        { date: "2026-06-05", plannedMinutes: 300, actualMinutes: 0 },
+        { date: "2026-06-06", plannedMinutes: 0, actualMinutes: 0 },
+        { date: "2026-06-07", plannedMinutes: 0, actualMinutes: 0 },
+      ],
+      weekTotals: {
+        plannedMinutes: 900,
+        actualMinutes: 210,
+        completionRate: 210 / 900,
         completedTaskCount: 1,
-        completionRate: 240 / 420,
       },
-    ]);
+    });
     taskPlatformMock.getDashboardTaskTimeline.mockResolvedValue({
       header: {
         taskId: "task-1",
@@ -73,14 +74,15 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("tab", { name: "タスク別" })).toBeInTheDocument();
   });
 
-  it("renders weekly summary labels", async () => {
+  it("renders weekly summary labels with daily chart and navigation", async () => {
     render(await DashboardPage());
 
     expect(screen.getByText("今週の予定")).toBeInTheDocument();
     expect(screen.getByText("今週の実績")).toBeInTheDocument();
-    expect(screen.getByText("今週の達成率")).toBeInTheDocument();
+    expect(screen.getByText("達成率")).toBeInTheDocument();
     expect(screen.getByText("完了タスク")).toBeInTheDocument();
-    expect(screen.getByTestId("dashboard-weekly-chart-frame")).toHaveClass("min-h-72", "min-w-0");
+    expect(screen.getByTestId("dashboard-daily-chart-frame")).toBeInTheDocument();
+    expect(screen.getByText("今日")).toBeInTheDocument();
   });
 
   it("renders task selector and task summary after switching tabs", async () => {
