@@ -130,6 +130,11 @@ export async function runSchedulerTickUseCase(
     });
 
     console.log("[scheduler] LLM analysis completed. slices:", analysis.slices.length, "rationale:", analysis.rationale);
+    if (analysis.slices.length === 0) {
+      console.log("[scheduler] WARNING: LLM returned 0 slices!");
+    } else {
+      console.log("[scheduler] first 3 slices:", JSON.stringify(analysis.slices.slice(0, 3)));
+    }
 
     const annotationByTaskId = new Map(analysis.annotations.map((annotation) => [annotation.taskId, annotation]));
     const annotatedTasks = tasks.map((task) => {
