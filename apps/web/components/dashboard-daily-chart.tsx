@@ -48,18 +48,22 @@ export function DashboardDailyChart({
     (d) => d.plannedHours > 0 || d.actualHours > 0,
   );
 
-  const customTooltip = (tooltipProps: {
+  const customTooltip = ({
+    active,
+    payload,
+    label,
+  }: {
     active?: boolean;
-    payload?: Array<{ name: string; value: number }>;
+    payload?: { name: string; value: number }[];
     label?: string;
   }) => {
-    if (!tooltipProps.active || !tooltipProps.payload?.length) return null;
+    if (!active || !payload?.length) return null;
     const entry = chartData.find(
-      (d) => d.dateLabel === tooltipProps.label || d.dayLabel === tooltipProps.label,
+      (d) => d.dateLabel === label || d.dayLabel === label,
     );
-    const label = entry
+    const displayLabel = entry
       ? `${entry.dateLabel} (${entry.dayLabel})`
-      : tooltipProps.label;
+      : label;
     return (
       <div
         style={{
@@ -70,8 +74,8 @@ export function DashboardDailyChart({
           fontSize: "13px",
         }}
       >
-        <div style={{ fontWeight: 600, marginBottom: "4px" }}>{label}</div>
-        {tooltipProps.payload.map((p) => (
+        <div style={{ fontWeight: 600, marginBottom: "4px" }}>{displayLabel}</div>
+        {payload.map((p) => (
           <div key={p.name} style={{ color: "#475569" }}>
             {p.name === "plannedHours" ? "計画" : "実績"}:{" "}
             {formatTooltipHours(p.value)}
@@ -90,7 +94,7 @@ export function DashboardDailyChart({
       <CartesianGrid vertical={false} strokeDasharray="3 3" />
       <XAxis
         dataKey="dateLabel"
-        tick={({ x, y, payload, index }: { x: number; y: number; payload: { value: string }; index: number }) => (
+        tick={({ x, y, payload, index }) => (
           <g transform={`translate(${x},${y})`}>
             <text x={0} y={0} dy={10} textAnchor="middle" fontSize={11} fill="#475569">
               {payload.value}
@@ -104,7 +108,7 @@ export function DashboardDailyChart({
         axisLine={false}
       />
       <YAxis tickLine={false} axisLine={false} />
-      <Tooltip content={customTooltip} />
+      <Tooltip content={customTooltip as React.ComponentProps<typeof Tooltip>["content"]} />
       <Bar dataKey="plannedHours" fill="#cbd5e1" radius={[6, 6, 0, 0]} />
       <Bar dataKey="actualHours" fill="#0f172a" radius={[6, 6, 0, 0]} />
     </BarChart>

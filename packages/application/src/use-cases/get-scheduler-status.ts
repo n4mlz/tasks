@@ -7,7 +7,7 @@ export async function getSchedulerStatusUseCase(
   },
 ) {
   const state = await deps.schedulerStateRepository.getState();
-  const latestRun = (await deps.schedulerStateRepository.listRuns(1))[0];
+  const latestRun = (await deps.schedulerStateRepository.listRuns({ limit: 1 }))[0];
   const hasPendingChanges =
     state.currentRevision > state.lastScheduledRevision ||
     state.schedulerStatus === "failed";
