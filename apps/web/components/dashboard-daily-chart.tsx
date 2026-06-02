@@ -129,7 +129,7 @@ export function DashboardDailyChart({
         {isTest ? (
           chart
         ) : (
-          <ResponsiveContainer height="100%" minWidth={0} minHeight={288} width="100%">
+          <ResponsiveContainer height={288} minWidth={0} width="100%">
             {chart}
           </ResponsiveContainer>
         )}
