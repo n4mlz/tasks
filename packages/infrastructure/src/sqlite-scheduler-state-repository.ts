@@ -283,41 +283,10 @@ export class SqliteSchedulerStateRepository {
       .run(nextMutationAt, SINGLETON_ID);
   }
 
-  async listMutations(limit = 50): Promise<
-    Array<{
-      id: string;
-      revision: number;
-      mutationKind: string;
-      entityType: string;
-      entityId: string | null;
-      createdAt: string;
-      details: Record<string, unknown>;
-    }>
-  > {
-    this.ensureState();
-    const rows = this.db
-      .prepare(
-        `
-          SELECT *
-          FROM planning_mutations
-          ORDER BY revision DESC, created_at DESC
-          LIMIT ?
-        `,
-      )
-      .all(limit) as Array<Record<string, unknown>>;
-
-    return rows.map((row) => ({
-      id: String(row.id),
-      revision: Number(row.revision),
-      mutationKind: String(row.mutation_kind),
-      entityType: String(row.entity_type),
-      entityId: row.entity_id ? String(row.entity_id) : null,
-      createdAt: String(row.created_at),
-      details: JSON.parse(String(row.details_json)) as Record<string, unknown>,
-    }));
-  }
-
-  async listRuns(limit = 30): Promise<
+  async listRuns(input?: {
+    cursor?: string;
+    limit?: number;
+  }): Promise<
     Array<{
       id: string;
       targetRevision: number;
@@ -330,16 +299,20 @@ export class SqliteSchedulerStateRepository {
       errorMessage: string;
     }>
   > {
+    const limit = input?.limit ?? 20;
+    const cursor = input?.cursor;
+
     const rows = this.db
       .prepare(
         `
           SELECT *
           FROM schedule_runs
+          WHERE (? IS NULL OR started_at < ?)
           ORDER BY started_at DESC
           LIMIT ?
         `,
       )
-      .all(limit) as Array<Record<string, unknown>>;
+      .all(cursor ?? null, cursor ?? null, limit) as Array<Record<string, unknown>>;
 
     return rows.map((row) => ({
       id: String(row.id),
