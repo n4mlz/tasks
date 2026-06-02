@@ -3,7 +3,7 @@
 import React from "react";
 import { MetricCard } from "./metric-card";
 import { DashboardTaskChart } from "./dashboard-task-chart";
-import { DashboardWeeklyChart } from "./dashboard-weekly-chart";
+import { DashboardDailyChart } from "./dashboard-daily-chart";
 import { TaskSelector } from "./task-selector";
 import { formatHoursFromMinutes } from "../lib/presentation";
 import { cn } from "../lib/utils";
@@ -18,18 +18,32 @@ function MetricTile({
   return <MetricCard label={label} value={value} />;
 }
 
+function formatWeekRange(weekStart: string): string {
+  const startDate = new Date(`${weekStart}T00:00:00.000Z`);
+  const endDate = new Date(startDate);
+  endDate.setUTCDate(endDate.getUTCDate() + 6);
+  return `${startDate.getUTCMonth() + 1}/${startDate.getUTCDate()} (月) - ${endDate.getUTCMonth() + 1}/${endDate.getUTCDate()} (日)`;
+}
+
 export function DashboardTabs({
-  weeklySummary,
+  dailySummary,
   tasks,
   selectedTask,
+  initialWeekStart,
 }: Readonly<{
-  weeklySummary: Array<{
-    weekStart: string;
-    plannedMinutes: number;
-    actualMinutes: number;
-    completedTaskCount: number;
-    completionRate: number;
-  }>;
+  dailySummary: {
+    days: Array<{
+      date: string;
+      plannedMinutes: number;
+      actualMinutes: number;
+    }>;
+    weekTotals: {
+      plannedMinutes: number;
+      actualMinutes: number;
+      completionRate: number;
+      completedTaskCount: number;
+    };
+  };
   tasks: Array<{ id: string; title: string }>;
   selectedTask: {
     header: {
@@ -47,15 +61,33 @@ export function DashboardTabs({
       actualMinutes: number;
     }>;
   } | null;
+  initialWeekStart: string;
 }>) {
   const [activeTab, setActiveTab] = React.useState<"weekly" | "task">("weekly");
-  const currentWeek = weeklySummary.at(-1) ?? {
-    weekStart: "",
-    plannedMinutes: 0,
-    actualMinutes: 0,
-    completedTaskCount: 0,
-    completionRate: 0,
-  };
+  const [weekStart, setWeekStart] = React.useState(initialWeekStart);
+
+  function navigateWeek(direction: -1 | 1) {
+    setWeekStart((prev) => {
+      const d = new Date(`${prev}T00:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() + direction * 7);
+      return d.toISOString().slice(0, 10);
+    });
+  }
+
+  function goToToday() {
+    const today = new Date();
+    const day = today.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    today.setUTCDate(today.getUTCDate() + diff);
+    setWeekStart(today.toISOString().slice(0, 10));
+  }
+
+  const handleWeekChange = React.useCallback(
+    (direction: -1 | 1) => () => navigateWeek(direction),
+    [],
+  );
+
+  const totals = dailySummary.weekTotals;
 
   return (
     <div className="grid gap-4">
@@ -92,15 +124,43 @@ export function DashboardTabs({
 
       {activeTab === "weekly" ? (
         <div role="tabpanel" className="grid gap-4">
-          <DashboardWeeklyChart data={weeklySummary} />
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleWeekChange(-1)}
+              className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              &larr; 前週
+            </button>
+            <span className="text-sm font-medium text-slate-700">
+              {formatWeekRange(weekStart)}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={goToToday}
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                今日
+              </button>
+              <button
+                type="button"
+                onClick={handleWeekChange(1)}
+                className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                次週 &rarr;
+              </button>
+            </div>
+          </div>
+          <DashboardDailyChart data={dailySummary.days} />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricTile label="今週の予定" value={formatHoursFromMinutes(currentWeek.plannedMinutes)} />
-            <MetricTile label="今週の実績" value={formatHoursFromMinutes(currentWeek.actualMinutes)} />
+            <MetricTile label="今週の予定" value={formatHoursFromMinutes(totals.plannedMinutes)} />
+            <MetricTile label="今週の実績" value={formatHoursFromMinutes(totals.actualMinutes)} />
             <MetricTile
-              label="今週の達成率"
-              value={`${Math.round(currentWeek.completionRate * 100)}%`}
+              label="達成率"
+              value={`${Math.round(totals.completionRate * 100)}%`}
             />
-            <MetricTile label="完了タスク" value={`${currentWeek.completedTaskCount}`} />
+            <MetricTile label="完了タスク" value={`${totals.completedTaskCount}`} />
           </div>
         </div>
       ) : (
