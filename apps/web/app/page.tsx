@@ -38,7 +38,7 @@ export default async function HomePage() {
     shortfallMinutes?: number;
     horizonEnd?: string;
   };
-  const tasks = (await taskPlatform.listTasks({ status: "active" })) as Array<{
+  const tasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
     title: string;
     taskType?: string;
@@ -48,15 +48,20 @@ export default async function HomePage() {
     remainingMinutes?: number;
     status?: string;
   }>;
+  const activeTasks = tasks.filter((task) => task.status === "active");
   const metrics = (await taskPlatform.getMetrics(today, today)) as {
     plannedMinutes: number;
     actualMinutes: number;
   };
 
   const taskTitles = new Map(tasks.map((task) => [task.id, task]));
-  const todaysSlices = schedule.slices.filter((slice) => slice.date === today);
+  const allTodaysSlices = schedule.slices.filter((slice) => slice.date === today);
+  const todaysSlices = allTodaysSlices.filter((slice) => {
+    const task = taskTitles.get(slice.task_id ?? "");
+    return !task || task.status !== "done";
+  });
   const todaysTaskIds = new Set(todaysSlices.map((slice) => slice.task_id).filter(Boolean));
-  const otherActiveTasks = tasks.filter(
+  const otherActiveTasks = activeTasks.filter(
     (task) => task.id && !todaysTaskIds.has(task.id),
   );
   const todayReserveMinutes = schedule.summary?.bufferUsageByDate?.[today] ?? 0;
