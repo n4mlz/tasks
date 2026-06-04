@@ -36,11 +36,16 @@ export default async function DashboardPage(props: {
     id: string;
     title: string;
     status?: string;
+    updatedAt?: string;
   }>;
-  const tasks = allTasks
-    .filter((task) => task.status !== "archived")
-    .filter((task) => showCompleted || task.status !== "done")
-    .map((task) => ({ id: task.id, title: task.title }));
+  const tasks = showCompleted
+    ? allTasks
+        .filter((task) => task.status === "done")
+        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+        .map((task) => ({ id: task.id, title: task.title }))
+    : allTasks
+        .filter((task) => task.status !== "done" && task.status !== "archived")
+        .map((task) => ({ id: task.id, title: task.title }));
   const selectedTaskId =
     (searchParams.taskId && tasks.some((task) => task.id === searchParams.taskId)
       ? searchParams.taskId
@@ -90,7 +95,7 @@ export default async function DashboardPage(props: {
           })()}
           className="text-xs text-slate-500 underline hover:text-slate-700"
         >
-          {showCompleted ? "未完了のみ表示" : "完了も表示"}
+          {showCompleted ? "未完了を表示" : "完了を表示"}
         </a>
       </div>
       <DashboardTabs

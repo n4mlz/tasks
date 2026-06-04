@@ -33,9 +33,12 @@ export default async function InboxPage(props: {
     energy?: string;
     tags?: string[];
     notes?: string;
+    updatedAt?: string;
   }>;
   const tasks = showCompleted
     ? allTasks
+        .filter((task) => task.status === "done")
+        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
     : allTasks.filter((task) => task.status !== "done" && task.status !== "archived");
 
   return (
@@ -48,7 +51,7 @@ export default async function InboxPage(props: {
             href={showCompleted ? "/inbox" : "/inbox?showCompleted=1"}
             className="text-xs text-slate-500 underline hover:text-slate-700"
           >
-            {showCompleted ? "未完了のみ表示" : "完了も表示"}
+            {showCompleted ? "未完了を表示" : "完了を表示"}
           </a>
         </div>
       </div>

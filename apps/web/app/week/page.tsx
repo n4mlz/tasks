@@ -125,6 +125,7 @@ export default async function WeekPage(props: {
     cognitiveLoad?: string;
     energy?: string;
     tags?: string[];
+    updatedAt?: string;
   }>;
   const workLogs = (await taskPlatform.getWorkLogs(tasks.map((task) => task.id))) as Array<{
     taskId: string;
@@ -154,9 +155,12 @@ export default async function WeekPage(props: {
     );
   }
 
-  const taskOverview = tasks
-    .filter((task) => task.status !== "archived")
-    .filter((task) => showCompleted || task.status !== "done")
+  const taskOverview = (showCompleted
+    ? tasks
+        .filter((task) => task.status === "done")
+        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+    : tasks.filter((task) => task.status !== "done" && task.status !== "archived")
+  )
     .map((task) => {
       const slices = schedule.slices
         .filter((slice) => slice.task_id === task.id)
@@ -215,7 +219,7 @@ export default async function WeekPage(props: {
             }
             className="text-xs text-slate-500 underline hover:text-slate-700"
           >
-            {showCompleted ? "未完了のみ表示" : "完了も表示"}
+            {showCompleted ? "未完了を表示" : "完了を表示"}
           </a>
           <StatusBadge tone="secondary">
             {`予定 ${formatHoursFromMinutes(metrics.plannedMinutes)}`}
