@@ -111,6 +111,8 @@ export class SqliteTaskRepository {
   }
 
   async delete(taskId: string): Promise<void> {
+    this.db.prepare(`DELETE FROM task_work_logs WHERE task_id = ?`).run(taskId);
+    this.db.prepare(`DELETE FROM scheduled_task_slices WHERE task_id = ?`).run(taskId);
     this.db.prepare(`DELETE FROM tasks WHERE id = ?`).run(taskId);
   }
 }

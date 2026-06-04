@@ -6,6 +6,10 @@ export async function POST(
   context: { params: Promise<{ taskId: string }> },
 ) {
   const params = await context.params;
-  await taskPlatform.deleteTask({ taskId: params.taskId });
+  try {
+    await taskPlatform.deleteTask({ taskId: params.taskId });
+  } catch (error) {
+    console.error("[delete-task] failed:", error);
+  }
   return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
 }
