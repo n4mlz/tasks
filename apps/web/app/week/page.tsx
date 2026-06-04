@@ -74,11 +74,12 @@ function formatMonthHeading(date: string): string {
 }
 
 export default async function WeekPage(props: {
-  searchParams?: Promise<{ referenceDate?: string }>;
+  searchParams?: Promise<{ referenceDate?: string; showCompleted?: string }>;
 } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const searchParams = (await props.searchParams) ?? {};
   const referenceDate = searchParams.referenceDate || today;
+  const showCompleted = searchParams.showCompleted === "1";
   const monthStart = startOfMonth(referenceDate);
   const monthEnd = endOfMonth(referenceDate);
   const calendarDays = buildCalendarDays(referenceDate);
@@ -155,6 +156,7 @@ export default async function WeekPage(props: {
 
   const taskOverview = tasks
     .filter((task) => task.status !== "archived")
+    .filter((task) => showCompleted || task.status !== "done")
     .map((task) => {
       const slices = schedule.slices
         .filter((slice) => slice.task_id === task.id)
@@ -205,6 +207,16 @@ export default async function WeekPage(props: {
         <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">計画</h1>
         <div className="flex flex-wrap gap-2">
           <StatusBadge>{referenceDate.slice(0, 7)}</StatusBadge>
+          <a
+            href={
+              showCompleted
+                ? `/week?referenceDate=${referenceDate}`
+                : `/week?referenceDate=${referenceDate}&showCompleted=1`
+            }
+            className="text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            {showCompleted ? "未完了のみ表示" : "完了も表示"}
+          </a>
           <StatusBadge tone="secondary">
             {`予定 ${formatHoursFromMinutes(metrics.plannedMinutes)}`}
           </StatusBadge>

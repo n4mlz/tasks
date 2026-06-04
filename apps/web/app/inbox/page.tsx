@@ -17,8 +17,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function InboxPage() {
-  const tasks = (await taskPlatform.listTasks()) as Array<{
+export default async function InboxPage(props: {
+  searchParams?: Promise<{ showCompleted?: string }>;
+} = {}) {
+  const searchParams = (await props.searchParams) ?? {};
+  const showCompleted = searchParams.showCompleted === "1";
+  const allTasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
     title: string;
     remainingMinutes: number;
@@ -30,12 +34,23 @@ export default async function InboxPage() {
     tags?: string[];
     notes?: string;
   }>;
+  const tasks = showCompleted
+    ? allTasks
+    : allTasks.filter((task) => task.status !== "done" && task.status !== "archived");
 
   return (
     <section className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Inbox</h1>
-        <StatusBadge tone="secondary">{`${tasks.length} 件`}</StatusBadge>
+        <div className="flex items-center gap-3">
+          <StatusBadge tone="secondary">{`${tasks.length} 件`}</StatusBadge>
+          <a
+            href={showCompleted ? "/inbox" : "/inbox?showCompleted=1"}
+            className="text-xs text-slate-500 underline hover:text-slate-700"
+          >
+            {showCompleted ? "未完了のみ表示" : "完了も表示"}
+          </a>
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">

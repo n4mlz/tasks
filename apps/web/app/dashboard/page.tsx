@@ -13,9 +13,10 @@ function getMondayOfWeek(date: Date): string {
 }
 
 export default async function DashboardPage(props: {
-  searchParams?: Promise<{ taskId?: string; week?: string }>;
+  searchParams?: Promise<{ taskId?: string; week?: string; showCompleted?: string }>;
 } = {}) {
   const searchParams = (await props.searchParams) ?? {};
+  const showCompleted = searchParams.showCompleted === "1";
   const today = new Date();
   const weekStart = searchParams.week ?? getMondayOfWeek(today);
   const dailySummary = (await taskPlatform.getDashboardDailySummary({ weekStart })) as {
@@ -38,6 +39,7 @@ export default async function DashboardPage(props: {
   }>;
   const tasks = allTasks
     .filter((task) => task.status !== "archived")
+    .filter((task) => showCompleted || task.status !== "done")
     .map((task) => ({ id: task.id, title: task.title }));
   const selectedTaskId =
     (searchParams.taskId && tasks.some((task) => task.id === searchParams.taskId)
@@ -75,6 +77,21 @@ export default async function DashboardPage(props: {
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">ダッシュボード</h1>
+        <a
+          href={(() => {
+            const params = new URLSearchParams(searchParams as Record<string, string>);
+            if (showCompleted) {
+              params.delete("showCompleted");
+            } else {
+              params.set("showCompleted", "1");
+            }
+            const qs = params.toString();
+            return qs ? `/dashboard?${qs}` : "/dashboard";
+          })()}
+          className="text-xs text-slate-500 underline hover:text-slate-700"
+        >
+          {showCompleted ? "未完了のみ表示" : "完了も表示"}
+        </a>
       </div>
       <DashboardTabs
         dailySummary={dailySummary}
