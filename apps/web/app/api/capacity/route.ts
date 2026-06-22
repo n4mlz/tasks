@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   await taskPlatform.setCapacity(parsed);
 
   if (!contentType.includes("application/json")) {
-    return NextResponse.redirect(new URL("/week", request.url), { status: 303 });
+    return NextResponse.redirect("/week", { status: 303 });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });

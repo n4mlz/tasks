@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
+  cancelSchedulerUseCase,
   createTaskUseCase,
   deleteTaskUseCase,
   getDashboardDailySummaryUseCase,
@@ -106,6 +107,7 @@ type TaskPlatform = {
     dateTo?: string;
   } | string[]) => Promise<unknown>;
   getSchedulerStatus: () => Promise<unknown>;
+  cancelScheduler: () => Promise<void>;
   postponeScheduler: (input: { delayMilliseconds: number }) => Promise<void>;
   listSchedulerLogs: (input?: { cursor?: string; limit?: number }) => Promise<unknown>;
   runSchedulerTick: (input?: { force?: boolean }) => Promise<unknown>;
@@ -317,6 +319,11 @@ function getTaskPlatform(): TaskPlatform {
       return getSchedulerStatusUseCase({
         schedulerStateRepository,
         clock,
+      });
+    },
+    async cancelScheduler() {
+      return cancelSchedulerUseCase({
+        schedulerStateRepository,
       });
     },
     async postponeScheduler(input) {

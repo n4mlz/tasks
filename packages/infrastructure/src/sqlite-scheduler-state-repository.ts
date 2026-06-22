@@ -147,7 +147,7 @@ export class SqliteSchedulerStateRepository {
         const isStale =
           startedAt === null ||
           Number.isNaN(startedAt) ||
-          new Date(input.now).getTime() - startedAt > 5 * 60_000;
+          new Date(input.now).getTime() - startedAt > 15 * 60_000;
 
         if (isStale) {
           this.db
@@ -244,6 +244,19 @@ export class SqliteSchedulerStateRepository {
         revisionAdvanced ? "pending" : input.status,
         SINGLETON_ID,
       );
+  }
+
+  async cancelRun(): Promise<void> {
+    this.ensureState();
+    this.db
+      .prepare(
+        `
+          UPDATE planning_state
+          SET scheduler_status = 'pending', running_revision = NULL, running_started_at = NULL
+          WHERE singleton_id = ? AND scheduler_status = 'running'
+        `,
+      )
+      .run(SINGLETON_ID);
   }
 
   async postponeNextRun(input: {

@@ -11,5 +11,5 @@ export async function POST(
   } catch (error) {
     console.error("[delete-task] failed:", error);
   }
-  return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
+  return NextResponse.redirect("/inbox", { status: 303 });
 }

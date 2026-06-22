@@ -36,7 +36,7 @@ export async function POST(
   await taskPlatform.logWork(parsed);
 
   if (!contentType.includes("application/json")) {
-    return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+    return NextResponse.redirect("/", { status: 303 });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });

@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   await taskPlatform.createTask(parsed);
 
   if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
-    return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
+    return NextResponse.redirect("/inbox", { status: 303 });
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });

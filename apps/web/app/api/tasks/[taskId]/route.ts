@@ -43,7 +43,7 @@ async function applyTaskUpdate(
   });
 
   if (method === "POST") {
-    return NextResponse.redirect(new URL("/inbox", request.url), { status: 303 });
+    return NextResponse.redirect("/inbox", { status: 303 });
   }
 
   return NextResponse.json({ ok: true }, { status: 200 });

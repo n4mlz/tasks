@@ -24,7 +24,9 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({
     refresh: refreshMock,
+    push: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(""),
 }));
 
 import HomePage from "../app/page";

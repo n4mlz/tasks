@@ -1,4 +1,5 @@
 import React from "react";
+import { DateNavigation } from "../components/date-navigation";
 import { PlanningAlert } from "../components/planning-alert";
 import { QuickWorkLog } from "../components/quick-work-log";
 import { StatusBadge } from "../components/status-badge";
@@ -15,8 +16,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const today = new Date().toISOString().slice(0, 10);
+export default async function HomePage(props?: {
+  searchParams?: Promise<{ date?: string }>;
+}) {
+  const searchParams = props?.searchParams ? await props.searchParams : {};
+  const today = (searchParams as { date?: string }).date ?? new Date().toISOString().slice(0, 10);
+  const realToday = new Date().toISOString().slice(0, 10);
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeScheduleId: string | null;
     summary?: {
@@ -69,7 +74,12 @@ export default async function HomePage() {
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">今日</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">
+            {today === realToday ? "今日" : today}
+          </h1>
+          <DateNavigation date={today} />
+        </div>
         <div className="flex flex-wrap gap-2">
           <StatusBadge>{formatHoursFromMinutes(metrics.plannedMinutes)}</StatusBadge>
           <StatusBadge tone="secondary">

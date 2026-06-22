@@ -63,6 +63,7 @@ export interface SchedulerStateRepository {
     scheduled: boolean;
     processed?: boolean;
   }): Promise<void>;
+  cancelRun(): Promise<void>;
   postponeNextRun(input: {
     now: string;
     delayMilliseconds: number;

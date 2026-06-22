@@ -23,7 +23,9 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/inbox",
   useRouter: () => ({
     refresh: vi.fn(),
+    push: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(""),
 }));
 
 import InboxPage from "../app/inbox/page";

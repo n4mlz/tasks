@@ -223,6 +223,11 @@ export function createPlanningIntelligence(): PlanningIntelligence {
         JSON.stringify(payload, null, 2),
       ].join("\n");
 
+      const promptLength = JSON.stringify(payload).length;
+      const taskCount = input.tasks.length;
+      const capacityDayCount = input.capacities.length;
+      console.log(`[scheduler] LLM request: ${taskCount} tasks, ${capacityDayCount} capacity days, prompt ~${Math.round(promptLength / 1024)}KB, timeout ${timeoutMs}ms`);
+
       async function runStructured(): Promise<PlannerOutput> {
         const { output } = await generateText({
           model: resolvedModel,

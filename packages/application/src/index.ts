@@ -12,6 +12,7 @@ export { getPlanningHealthUseCase } from "./use-cases/get-planning-health";
 export { getSchedulerStatusUseCase } from "./use-cases/get-scheduler-status";
 export { listSchedulerLogsUseCase } from "./use-cases/list-scheduler-logs";
 export { postponeSchedulerUseCase } from "./use-cases/postpone-scheduler";
+export { cancelSchedulerUseCase } from "./use-cases/cancel-scheduler";
 export { runSchedulerTickUseCase } from "./use-cases/run-scheduler-tick";
 export { getDashboardWeeklySummaryUseCase } from "./use-cases/get-dashboard-weekly-summary";
 export { getDashboardDailySummaryUseCase } from "./use-cases/get-dashboard-daily-summary";
