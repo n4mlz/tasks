@@ -161,36 +161,38 @@ export function SchedulerStatus() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-      <StatusBadge tone={status.schedulerStatus === "running" ? "warning" : status.schedulerStatus === "failed" ? "danger" : status.hasPendingChanges ? "secondary" : "outline"}>
-        {status.schedulerStatus === "running"
-          ? "再配分中"
-          : status.schedulerStatus === "failed"
-            ? "要見直し"
-          : status.hasPendingChanges
-            ? "再配分待ち"
-            : "最新"}
-      </StatusBadge>
-      <span>{`最終再配分 ${formatDateTimeShort(status.lastScheduledAt)}`}</span>
-      {status.hasPendingChanges ? (
-        <span>{`次回 ${formatEtaMinutes(displaySecondsUntilNextRun)}`}</span>
-      ) : null}
-      {status.hasPendingChanges && status.schedulerStatus !== "running" && status.schedulerStatus !== "failed" ? (
-        <Button
-          onClick={handleDelay}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          3分延長
-        </Button>
-      ) : null}
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone={status.schedulerStatus === "running" ? "warning" : status.schedulerStatus === "failed" ? "danger" : status.hasPendingChanges ? "secondary" : "outline"}>
+          {status.schedulerStatus === "running"
+            ? "再配分中"
+            : status.schedulerStatus === "failed"
+              ? "要見直し"
+            : status.hasPendingChanges
+              ? "再配分待ち"
+              : "最新"}
+        </StatusBadge>
+        <span>{`最終再配分 ${formatDateTimeShort(status.lastScheduledAt)}`}</span>
+        {status.hasPendingChanges ? (
+          <span>{`次回 ${formatEtaMinutes(displaySecondsUntilNextRun)}`}</span>
+        ) : null}
+        {status.hasPendingChanges && status.schedulerStatus !== "running" && status.schedulerStatus !== "failed" ? (
+          <Button
+            onClick={handleDelay}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            3分延長
+          </Button>
+        ) : null}
+      </div>
       {status.schedulerStatus === "running" ? (
         <Button
           onClick={handleCancel}
           size="sm"
           type="button"
-          variant="warning"
+          variant="outline"
           disabled={isCancelling}
         >
           {isCancelling ? (
