@@ -21,30 +21,24 @@ Task Platform は、個人のタスク管理を `考える面` と `進める面
 - 推定結果と期限、余力時間をもとに current schedule を自動再計算する
 - `計画` 画面の月カレンダーで日ごとの余力時間を編集する
 - `今日` 画面から、今日の task と今日に割り当たっていない active task の両方に対して作業記録を入れる
-- `ダッシュボード` で直近 8 週間の予定時間 / 実績時間、および task ごとの週次推移を見る
-- `ログ` で変更履歴と scheduler 実行履歴を見る
+- `振り返り` で直近 8 週間の予定時間 / 実績時間、task ごとの週次推移、再配分履歴を見る
 - `planning health` で直近 7 日の余力時間不足や capacity 未設定日を確認する
 - `3分延長` と `今すぐ再配分` で scheduler を制御する
 
 ## 画面
 
-現在の Web UI は 5 画面です。
+現在の Web UI は 4 つの主要画面です。
 
 - `今日` (`/`)
-  - 今日の task 列を表示します
-  - 予定時間、実績時間、当日バッファ使用量、計画の有無を見られます
-  - `作業記録` と `他の task を記録` から実績を入れます
+  - 今日の予定と実績を確認し、作業を記録します
 - `Inbox` (`/inbox`)
-  - task を追加します
-  - 既存 task の編集と削除も行います
+  - task の追加、編集、削除を行います
 - `計画` (`/week`)
-  - 月カレンダーで日ごとの余力時間を編集します
-  - task ごとの残り時間、実績、進捗率、配分見込みを見ます
-- `ダッシュボード` (`/dashboard`)
-  - 直近 8 週間の `予定時間 / 実績時間` を週次で見ます
-  - 任意 task の週次推移も見られます
-- `ログ` (`/logs`)
-  - mutation log と scheduler run log を確認します
+  - 月カレンダーで日ごとの余力時間と task の配分を確認します
+- `振り返り` (`/dashboard`)
+  - 週ごと / task ごとの進捗と再配分履歴を確認します
+
+`/logs` は振り返りの再配分履歴へ転送します。LLM が推定する task のタグや分類は配分に使い、通常の画面には表示しません。
 
 proposal 承認フロー専用画面はありません。変更が落ち着いた後に自動再配分する方式です。
 
@@ -53,7 +47,7 @@ proposal 承認フロー専用画面はありません。変更が落ち着い�
 このリポジトリは pnpm workspace 上の TypeScript modular monolith です。
 
 - `apps/web`
-  - Next.js 16 / React 19 の Web UI
+  - Next.js 16 / React 19 / Chakra UI 3 の Web UI
   - SQLite を直接使う service facade と API route を持ちます
 - `apps/mcp`
   - MCP server の tool 定義と runtime/bootstrap

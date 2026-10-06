@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { formatHoursFromMinutes } from "../lib/presentation";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Box, Link as ChakraLink, Stack, Text } from "@chakra-ui/react";
+import NextLink from "next/link";
+import { formatHoursFromMinutes, formatJapaneseDate } from "../lib/presentation";
 
 type PlanningHealthPayload = {
   missingCapacityDatesWithin7Days: string[];
@@ -11,62 +12,85 @@ type PlanningHealthPayload = {
   horizonEnd?: string;
 };
 
+function formatDateRanges(dates: string[]): string {
+  const sorted = [...new Set(dates)].sort();
+  const ranges: Array<[string, string]> = [];
+
+  for (const date of sorted) {
+    const current = new Date(`${date}T00:00:00.000Z`);
+    const previousRange = ranges.at(-1);
+    const previous = previousRange ? new Date(`${previousRange[1]}T00:00:00.000Z`) : null;
+    const daysApart = previous ? (current.getTime() - previous.getTime()) / 86_400_000 : 0;
+
+    if (previousRange && daysApart === 1) previousRange[1] = date;
+    else ranges.push([date, date]);
+  }
+
+  return ranges
+    .map(([start, end]) => start === end
+      ? formatJapaneseDate(start, true)
+      : `${formatJapaneseDate(start, true)}〜${formatJapaneseDate(end, true)}`)
+    .join("、");
+}
+
 export function PlanningAlert({
   initialHealth,
-  compact = false,
-}: Readonly<{
-  initialHealth: PlanningHealthPayload;
-  compact?: boolean;
-}>) {
+}: Readonly<{ initialHealth: PlanningHealthPayload }>) {
   const [health, setHealth] = React.useState(initialHealth);
 
-  const refresh = React.useCallback(async () => {
-    const response = await fetch("/api/planning-health", { cache: "no-store" });
-    if (!response.ok) return;
-    const payload = (await response.json()) as PlanningHealthPayload;
-    setHealth(payload);
+  React.useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/planning-health", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as PlanningHealthPayload;
+        if (active) setHealth(payload);
+      } catch {
+        // Keep the server-rendered planning status when refresh fails.
+      }
+    };
+
+    window.addEventListener("task-platform:planning-changed", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("task-platform:planning-changed", refresh);
+    };
   }, []);
 
-  React.useEffect(() => {
-    const onChanged = () => {
-      void refresh();
-    };
-
-    window.addEventListener("task-platform:planning-changed", onChanged);
-    const interval = window.setInterval(() => {
-      void refresh();
-    }, 30_000);
-
-    return () => {
-      window.removeEventListener("task-platform:planning-changed", onChanged);
-      window.clearInterval(interval);
-    };
-  }, [refresh]);
-
-  if (
-    health.missingCapacityDatesWithin7Days.length === 0 &&
-    !health.hasInsufficientCapacity
-  ) {
+  if (health.missingCapacityDatesWithin7Days.length === 0 && !health.hasInsufficientCapacity) {
     return null;
   }
 
   return (
-    <Alert className={compact ? "px-4 py-3" : ""} variant="warning">
-      <AlertTitle>計画の見直しが必要です</AlertTitle>
-      <AlertDescription className="grid gap-1">
+    <Box
+      role="status"
+      borderWidth="1px"
+      borderColor="#e9c886"
+      borderRadius="xl"
+      bg="#fff9ea"
+      px={{ base: "4", md: "5" }}
+      py="4"
+    >
+      <Text fontWeight="650" color="#624919">
+        計画の確認が必要です
+      </Text>
+      <Stack mt="1.5" gap="1" color="#715d37" fontSize="sm">
         {health.missingCapacityDatesWithin7Days.length > 0 ? (
-          <div>{`直近 7 日で未設定の日付: ${health.missingCapacityDatesWithin7Days.join(", ")}`}</div>
+          <Text>
+            余力時間が未設定: {formatDateRanges(health.missingCapacityDatesWithin7Days)}
+          </Text>
         ) : null}
         {health.hasInsufficientCapacity ? (
-          <div>
-            {`現在の余力時間では足りません。少なくとも ${formatHoursFromMinutes(
-              health.shortfallMinutes ?? 0,
-            )} の余力を追加してください${
-              health.horizonEnd ? ` (${health.horizonEnd} まで)` : ""
-            }。`}
-          </div>
+          <Text>
+            余力時間が少なくとも {formatHoursFromMinutes(health.shortfallMinutes ?? 0)} 不足しています
+            {health.horizonEnd ? `（${formatJapaneseDate(health.horizonEnd)}まで）` : ""}。
+          </Text>
         ) : null}
-      </AlertDescription>
-    </Alert>
+        <ChakraLink asChild color="#315f58" fontWeight="600" textDecoration="underline">
+          <NextLink href="/week">計画を確認する</NextLink>
+        </ChakraLink>
+      </Stack>
+    </Box>
   );
 }

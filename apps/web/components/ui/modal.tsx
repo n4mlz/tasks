@@ -1,15 +1,18 @@
 "use client";
 
 import * as React from "react";
+import {
+  Dialog,
+  IconButton,
+  Portal,
+} from "@chakra-ui/react";
 import { X } from "lucide-react";
-import { cn } from "../../lib/utils";
 
 type ModalProps = {
-  trigger?: React.ReactNode;
+  trigger?: React.ReactElement;
   title: string;
   description?: string;
   children: React.ReactNode;
-  className?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
@@ -19,112 +22,49 @@ export function Modal({
   title,
   description,
   children,
-  className,
-  open: controlledOpen,
+  open,
   onOpenChange,
 }: ModalProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
-  const contentRef = React.useRef<HTMLDivElement | null>(null);
-  const open = controlledOpen ?? uncontrolledOpen;
-
-  const setOpen = React.useCallback(
-    (next: boolean) => {
-      if (controlledOpen === undefined) {
-        setUncontrolledOpen(next);
-      }
-      onOpenChange?.(next);
-    },
-    [controlledOpen, onOpenChange],
-  );
-
-  React.useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = Math.max(window.innerWidth - document.documentElement.clientWidth, 0);
-    document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
-    };
-  }, [open, setOpen]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    contentRef.current?.focus();
-  }, [open]);
-
-  const triggerNode =
-    trigger === undefined
-      ? null
-      : React.isValidElement(trigger)
-        ? React.cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
-            onClick: () => setOpen(true),
-          })
-        : (
-          <button onClick={() => setOpen(true)} type="button">
-            {trigger}
-          </button>
-        );
-
   return (
-    <>
-      {triggerNode}
-      {open ? (
-        <div
-          aria-hidden={false}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            aria-describedby={description ? "modal-description" : undefined}
-            aria-labelledby="modal-title"
-            className={cn(
-              "w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.22)]",
-              className,
-            )}
-            onClick={(event) => event.stopPropagation()}
-            ref={contentRef}
-            role="dialog"
-            tabIndex={-1}
+    <Dialog.Root
+      open={open}
+      onOpenChange={(details) => onOpenChange?.(details.open)}
+      size={{ mdDown: "full", md: "md" }}
+      scrollBehavior="inside"
+      placement="center"
+    >
+      {trigger ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
+      <Portal>
+        <Dialog.Backdrop bg="blackAlpha.500" />
+        <Dialog.Positioner p={{ base: "0", md: "4" }}>
+          <Dialog.Content
+            maxH={{ base: "100dvh", md: "calc(100dvh - 2rem)" }}
+            overflow="hidden"
+            borderRadius={{ base: "0", md: "2xl" }}
+            bg="white"
+            boxShadow="0 24px 72px rgba(22, 38, 39, 0.2)"
           >
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div className="grid gap-1">
-                <h2 id="modal-title" className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+            <Dialog.Header alignItems="flex-start" gap="4" borderBottomWidth="1px" borderColor="#edf0ef">
+              <div>
+                <Dialog.Title fontSize="lg" lineHeight="short" color="#202a33">
                   {title}
-                </h2>
+                </Dialog.Title>
                 {description ? (
-                  <p id="modal-description" className="text-sm text-slate-600">
+                  <Dialog.Description mt="1" fontSize="sm" color="#68777b">
                     {description}
-                  </p>
+                  </Dialog.Description>
                 ) : null}
               </div>
-              <button
-                aria-label="閉じる"
-                className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                onClick={() => setOpen(false)}
-                type="button"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {children}
-          </div>
-        </div>
-      ) : null}
-    </>
+              <Dialog.CloseTrigger asChild>
+                <IconButton aria-label="閉じる" variant="ghost" size="sm" ml="auto">
+                  <X size={18} />
+                </IconButton>
+              </Dialog.CloseTrigger>
+            </Dialog.Header>
+            <Dialog.Body py="5">{children}</Dialog.Body>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Portal>
+    </Dialog.Root>
   );
 }

@@ -1,12 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { ClipboardCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import {
+  Box,
+  Button,
+  Checkbox,
+  Input,
+  NativeSelect,
+  Stack,
+  Text,
+  Textarea,
+} from "@chakra-ui/react";
+import { ClipboardCheck } from "lucide-react";
 import { Modal } from "./ui/modal";
-import { Select } from "./ui/select";
 
 type WorkLogDialogProps = {
   taskId: string;
@@ -24,7 +31,7 @@ export function WorkLogDialog({
   title,
   date,
   defaultRemainingHours,
-  triggerLabel = "作業記録",
+  triggerLabel = "作業を記録",
   selectableTasks,
   selectedTaskId,
   onSelectedTaskIdChange,
@@ -32,45 +39,46 @@ export function WorkLogDialog({
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [spentHours, setSpentHours] = React.useState("");
-  const [remainingHours, setRemainingHours] = React.useState(defaultRemainingHours.toString());
+  const [remainingHours, setRemainingHours] = React.useState(String(defaultRemainingHours));
   const [markDone, setMarkDone] = React.useState(false);
   const [note, setNote] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
     if (markDone) {
       setRemainingHours("0");
       return;
     }
-
     const spent = Number(spentHours);
-    if (!Number.isFinite(spent) || spent <= 0) {
-      setRemainingHours(defaultRemainingHours.toString());
-      return;
-    }
-
-    setRemainingHours(Math.max(0, defaultRemainingHours - spent).toString());
+    setRemainingHours(
+      Number.isFinite(spent) && spent > 0
+        ? String(Math.max(0, defaultRemainingHours - spent))
+        : String(defaultRemainingHours),
+    );
   }, [defaultRemainingHours, markDone, spentHours]);
 
   React.useEffect(() => {
-    if (!open) {
-      setSpentHours("");
-      setNote("");
-      setMarkDone(false);
-      setRemainingHours(defaultRemainingHours.toString());
-    }
+    if (open) return;
+    setSpentHours("");
+    setNote("");
+    setMarkDone(false);
+    setRemainingHours(String(defaultRemainingHours));
   }, [defaultRemainingHours, open]);
 
   return (
     <Modal
-      description="進めた時間と残り見積もりを更新します。"
-      onOpenChange={setOpen}
       open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) setError(false);
+      }}
+      description="進めた時間を記録し、残りの見積もりを更新します。"
       title={title}
-      trigger={<Button type="button">{triggerLabel}</Button>}
+      trigger={<Button colorPalette="teal" size="sm">{triggerLabel}</Button>}
     >
-      <form
-        className="grid gap-4"
+      <Box
+        as="form"
         onSubmit={async (event) => {
           event.preventDefault();
           setSaving(true);
@@ -86,76 +94,78 @@ export function WorkLogDialog({
                 note,
               }),
             });
-            if (!response.ok) {
-              throw new Error("failed to save work log");
-            }
+            if (!response.ok) throw new Error("failed to save work log");
             window.dispatchEvent(new Event("task-platform:planning-changed"));
             setOpen(false);
             router.refresh();
+          } catch {
+            setError(true);
           } finally {
             setSaving(false);
           }
         }}
       >
-        {selectableTasks?.length ? (
-          <label className="grid gap-2 text-sm font-medium text-slate-700">
-            task
-            <Select
-              aria-label="task"
-              onChange={(event) => onSelectedTaskIdChange?.(event.target.value)}
-              value={selectedTaskId}
-            >
-              {selectableTasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.title}
-                </option>
-              ))}
-            </Select>
+        <Stack gap="4">
+          {error ? <Text role="alert" fontSize="sm" color="red.700">記録できませんでした。もう一度お試しください。</Text> : null}
+          {selectableTasks?.length ? (
+            <label>
+              <Text mb="1.5" fontSize="sm" fontWeight="600">タスク</Text>
+              <NativeSelect.Root>
+                <NativeSelect.Field
+                  aria-label="タスク"
+                  value={selectedTaskId}
+                  onChange={(event) => onSelectedTaskIdChange?.(event.target.value)}
+                >
+                  {selectableTasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
+                </NativeSelect.Field>
+                <NativeSelect.Indicator />
+              </NativeSelect.Root>
+            </label>
+          ) : null}
+          <label>
+            <Text mb="1.5" fontSize="sm" fontWeight="600">進めた時間</Text>
+            <Input
+              min="0.25"
+              step="0.25"
+              type="number"
+              inputMode="decimal"
+              required
+              value={spentHours}
+              onChange={(event) => setSpentHours(event.target.value)}
+              placeholder="時間"
+              borderColor="#d5dfdc"
+            />
           </label>
-        ) : null}
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          進めた時間 (時間)
-          <Input
-            min="0.25"
-            onChange={(event) => setSpentHours(event.target.value)}
-            step="0.25"
-            type="number"
-            value={spentHours}
-          />
-        </label>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          残り時間 (時間)
-          <Input
-            min="0"
-            onChange={(event) => {
-              setMarkDone(event.target.value === "0");
-              setRemainingHours(event.target.value);
-            }}
-            step="0.25"
-            type="number"
-            value={remainingHours}
-          />
-        </label>
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <input
-            checked={markDone}
-            className="h-4 w-4 rounded border-slate-300"
-            onChange={(event) => setMarkDone(event.target.checked)}
-            type="checkbox"
-          />
-          完了としてマークする
-        </label>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          メモ
-          <Input onChange={(event) => setNote(event.target.value)} value={note} />
-        </label>
-        <div className="flex justify-end">
-          <Button disabled={saving} type="submit">
-            <ClipboardCheck className="h-4 w-4" />
-            保存
+          <label>
+            <Text mb="1.5" fontSize="sm" fontWeight="600">残り時間</Text>
+            <Input
+              min="0"
+              step="0.25"
+              type="number"
+              inputMode="decimal"
+              value={remainingHours}
+              onChange={(event) => {
+                setMarkDone(event.target.value === "0");
+                setRemainingHours(event.target.value);
+              }}
+              borderColor="#d5dfdc"
+            />
+          </label>
+          <Checkbox.Root checked={markDone} onCheckedChange={(details) => setMarkDone(details.checked === true)}>
+            <Checkbox.HiddenInput />
+            <Checkbox.Control />
+            <Checkbox.Label fontSize="sm">完了としてマークする</Checkbox.Label>
+          </Checkbox.Root>
+          <label>
+            <Text mb="1.5" fontSize="sm" fontWeight="600">メモ（任意）</Text>
+            <Textarea rows={2} value={note} onChange={(event) => setNote(event.target.value)} borderColor="#d5dfdc" />
+          </label>
+          <Button type="submit" loading={saving} colorPalette="teal" alignSelf="flex-end">
+            <ClipboardCheck size={17} />
+            記録を保存
           </Button>
-        </div>
-      </form>
+        </Stack>
+      </Box>
     </Modal>
   );
 }

@@ -13,6 +13,9 @@ function parseAllowedDevOrigins(raw: string | undefined): string[] | undefined {
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: parseAllowedDevOrigins(process.env.ALLOWED_DEV_ORIGINS),
+  experimental: {
+    optimizePackageImports: ["@chakra-ui/react"],
+  },
   turbopack: {
     root: path.resolve(__dirname, "../.."),
   },

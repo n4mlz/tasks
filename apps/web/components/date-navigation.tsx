@@ -1,22 +1,22 @@
 "use client";
 
-import * as React from "react";
+import { Button, Flex, IconButton, Text } from "@chakra-ui/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { formatJapaneseDate } from "../lib/presentation";
 
-type DateNavigationProps = {
-  date: string;
-};
+type DateNavigationProps = { date: string };
 
 export function DateNavigation({ date }: DateNavigationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   function navigate(direction: -1 | 1) {
-    const d = new Date(`${date}T00:00:00.000Z`);
-    d.setUTCDate(d.getUTCDate() + direction);
+    const value = new Date(`${date}T00:00:00.000Z`);
+    value.setUTCDate(value.getUTCDate() + direction);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("date", d.toISOString().slice(0, 10));
-    router.push(params.size > 0 ? `/?${params.toString()}` : "/");
+    params.set("date", value.toISOString().slice(0, 10));
+    router.push(`/?${params.toString()}`);
   }
 
   function goToToday() {
@@ -25,45 +25,37 @@ export function DateNavigation({ date }: DateNavigationProps) {
     router.push(params.size > 0 ? `/?${params.toString()}` : "/");
   }
 
-  function formatDisplay(d: string): string {
-    const dateObj = new Date(`${d}T00:00:00.000Z`);
-    const month = dateObj.getUTCMonth() + 1;
-    const day = dateObj.getUTCDate();
-    const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
-    const weekday = weekdays[dateObj.getUTCDay()];
-    return `${month}/${day} (${weekday})`;
-  }
-
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const label = formatJapaneseDate(date, true);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
+    <Flex align="center" gap="1.5" flexWrap="wrap">
+      <IconButton
+        aria-label="前日"
         onClick={() => navigate(-1)}
-        className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+        size="sm"
+        variant="outline"
+        borderColor="#d9e1df"
       >
-        &larr; 前日
-      </button>
-      <span className="text-sm font-medium text-slate-700">
-        {formatDisplay(date)}
-      </span>
-      {date !== todayDate && (
-        <button
-          type="button"
-          onClick={goToToday}
-          className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
-        >
+        <ChevronLeft size={17} />
+      </IconButton>
+      <Text minW="20" textAlign="center" fontSize="sm" fontWeight="600" color="#455654">
+        {label}
+      </Text>
+      {date !== today ? (
+        <Button onClick={goToToday} size="sm" variant="outline" borderColor="#d9e1df">
           今日
-        </button>
-      )}
-      <button
-        type="button"
+        </Button>
+      ) : null}
+      <IconButton
+        aria-label="翌日"
         onClick={() => navigate(1)}
-        className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+        size="sm"
+        variant="outline"
+        borderColor="#d9e1df"
       >
-        翌日 &rarr;
-      </button>
-    </div>
+        <ChevronRight size={17} />
+      </IconButton>
+    </Flex>
   );
 }
