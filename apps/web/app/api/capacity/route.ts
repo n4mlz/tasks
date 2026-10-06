@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
 import { hoursToMinutes } from "../../../lib/presentation";
+import { redirectAfterPost } from "../../../lib/redirect";
 
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
   await taskPlatform.setCapacity(parsed);
 
   if (!contentType.includes("application/json")) {
-    return NextResponse.redirect("/week", { status: 303 });
+    return redirectAfterPost("/week");
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });

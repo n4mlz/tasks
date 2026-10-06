@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../lib/task-platform";
 import { hoursToMinutes } from "../../../lib/presentation";
+import { redirectAfterPost } from "../../../lib/redirect";
 
 async function readTaskPayload(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   await taskPlatform.createTask(parsed);
 
   if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
-    return NextResponse.redirect("/inbox", { status: 303 });
+    return redirectAfterPost("/inbox");
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });

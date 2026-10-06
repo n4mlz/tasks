@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../../../lib/task-platform";
 import { hoursToMinutes } from "../../../../../lib/presentation";
+import { redirectAfterPost } from "../../../../../lib/redirect";
 
 export async function POST(
   request: Request,
@@ -36,7 +37,7 @@ export async function POST(
   await taskPlatform.logWork(parsed);
 
   if (!contentType.includes("application/json")) {
-    return NextResponse.redirect("/", { status: 303 });
+    return redirectAfterPost("/");
   }
 
   return NextResponse.json({ ok: true }, { status: 201 });
