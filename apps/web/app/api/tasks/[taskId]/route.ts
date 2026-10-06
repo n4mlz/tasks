@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { taskPlatform } from "../../../../lib/task-platform";
 import { hoursToMinutes } from "../../../../lib/presentation";
+import { redirectAfterPost } from "../../../../lib/redirect";
 
 async function applyTaskUpdate(
   request: Request,
@@ -43,7 +44,7 @@ async function applyTaskUpdate(
   });
 
   if (method === "POST") {
-    return NextResponse.redirect("/inbox", { status: 303 });
+    return redirectAfterPost("/inbox");
   }
 
   return NextResponse.json({ ok: true }, { status: 200 });
