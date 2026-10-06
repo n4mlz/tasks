@@ -29,18 +29,18 @@ export function Modal({
     <Dialog.Root
       open={open}
       onOpenChange={(details) => onOpenChange?.(details.open)}
-      size={{ mdDown: "full", md: "md" }}
+      size={{ mdDown: "sm", md: "md" }}
       scrollBehavior="inside"
       placement="center"
     >
       {trigger ? <Dialog.Trigger asChild>{trigger}</Dialog.Trigger> : null}
       <Portal>
         <Dialog.Backdrop bg="blackAlpha.500" />
-        <Dialog.Positioner p={{ base: "0", md: "4" }}>
+        <Dialog.Positioner p="4">
           <Dialog.Content
-            maxH={{ base: "100dvh", md: "calc(100dvh - 2rem)" }}
+            maxH="calc(100dvh - 2rem)"
             overflow="hidden"
-            borderRadius={{ base: "0", md: "2xl" }}
+            borderRadius="2xl"
             bg="white"
             boxShadow="0 24px 72px rgba(22, 38, 39, 0.2)"
           >
