@@ -1,44 +1,31 @@
 import React from "react";
+import { Box, Button, Flex, Heading, HStack, Link as ChakraLink, Stack, Text } from "@chakra-ui/react";
+import NextLink from "next/link";
 import { DateNavigation } from "../components/date-navigation";
 import { PlanningAlert } from "../components/planning-alert";
 import { QuickWorkLog } from "../components/quick-work-log";
-import { StatusBadge } from "../components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { WorkLogDialog } from "../components/work-log-dialog";
 import { taskPlatform } from "../lib/task-platform";
-import {
-  cognitiveLoadLabels,
-  energyLabels,
-  formatHoursFromMinutes,
-  formatIsoDate,
-  taskTypeLabels,
-} from "../lib/presentation";
+import { formatHoursFromMinutes, formatJapaneseDate } from "../lib/presentation";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage(props?: {
+type HomePageProps = {
   searchParams?: Promise<{ date?: string }>;
-}) {
-  const searchParams = props?.searchParams ? await props.searchParams : {};
-  const today = (searchParams as { date?: string }).date ?? new Date().toISOString().slice(0, 10);
+};
+
+async function HomePage(): Promise<React.ReactElement>;
+async function HomePage(props: HomePageProps): Promise<React.ReactElement>;
+async function HomePage(props: HomePageProps = {}) {
+  const searchParams = props.searchParams ? await props.searchParams : {};
+  const today = searchParams.date ?? new Date().toISOString().slice(0, 10);
   const realToday = new Date().toISOString().slice(0, 10);
   const schedule = (await taskPlatform.getCurrentSchedule()) as {
     activeScheduleId: string | null;
-    summary?: {
-      bufferUsageByDate?: Record<string, number>;
-      datesUsingReserve?: string[];
-      insufficientEvenWithReserve?: boolean;
-    } | null;
-    slices: Array<{
-      task_id?: string;
-      date?: string;
-      planned_minutes?: number;
-      kind?: string;
-    }>;
+    slices: Array<{ task_id?: string; date?: string; planned_minutes?: number }>;
   };
   const planningHealth = (await taskPlatform.getPlanningHealth()) as {
     missingCapacityDatesWithin7Days: string[];
-    warningCount: number;
     hasInsufficientCapacity?: boolean;
     shortfallMinutes?: number;
     horizonEnd?: string;
@@ -46,10 +33,7 @@ export default async function HomePage(props?: {
   const tasks = (await taskPlatform.listTasks()) as Array<{
     id: string;
     title: string;
-    taskType?: string;
-    cognitiveLoad?: string;
-    energy?: string;
-    tags?: string[];
+    dueDate?: string | null;
     remainingMinutes?: number;
     status?: string;
   }>;
@@ -59,113 +43,114 @@ export default async function HomePage(props?: {
     actualMinutes: number;
   };
 
-  const taskTitles = new Map(tasks.map((task) => [task.id, task]));
-  const allTodaysSlices = schedule.slices.filter((slice) => slice.date === today);
-  const todaysSlices = allTodaysSlices.filter((slice) => {
-    const task = taskTitles.get(slice.task_id ?? "");
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const slices = schedule.slices.filter((slice) => {
+    if (slice.date !== today) return false;
+    const task = taskById.get(slice.task_id ?? "");
     return !task || task.status !== "done";
   });
-  const todaysTaskIds = new Set(todaysSlices.map((slice) => slice.task_id).filter(Boolean));
-  const otherActiveTasks = activeTasks.filter(
-    (task) => task.id && !todaysTaskIds.has(task.id),
-  );
-  const todayReserveMinutes = schedule.summary?.bufferUsageByDate?.[today] ?? 0;
+  const assignedIds = new Set(slices.map((slice) => slice.task_id).filter(Boolean));
+  const unassignedTasks = activeTasks.filter((task) => task.id && !assignedIds.has(task.id));
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">
-            {today === realToday ? "今日" : today}
-          </h1>
-          <DateNavigation date={today} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge>{formatHoursFromMinutes(metrics.plannedMinutes)}</StatusBadge>
-          <StatusBadge tone="secondary">
-            {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
-          </StatusBadge>
-          <StatusBadge tone={todayReserveMinutes > 0 ? "warning" : "outline"}>
-            {todayReserveMinutes > 0
-              ? `バッファ使用 ${formatHoursFromMinutes(todayReserveMinutes)}`
-              : "通常予算内"}
-          </StatusBadge>
-          <StatusBadge tone={schedule.activeScheduleId ? "success" : "outline"}>
-            {schedule.activeScheduleId ? "計画あり" : "まだ未計画"}
-          </StatusBadge>
-        </div>
-      </div>
+    <Stack gap={{ base: "5", md: "7" }}>
+      <Flex align={{ base: "flex-start", sm: "center" }} justify="space-between" gap="4" wrap="wrap">
+        <Stack gap="1">
+          <Heading size="2xl" letterSpacing="-0.04em" color="#1e302e">
+            {today === realToday ? "今日" : "予定"}
+          </Heading>
+          {today !== realToday ? <Text color="#71807e">{formatJapaneseDate(today)}</Text> : null}
+        </Stack>
+        <DateNavigation date={today} />
+      </Flex>
 
-      <PlanningAlert compact initialHealth={planningHealth} />
+      <HStack gap={{ base: "5", sm: "8" }} flexWrap="wrap" color="#526360">
+        <HStack gap="2">
+          <Text fontSize="sm" color="#778582">予定</Text>
+          <Text fontSize="lg" fontWeight="650" color="#263a37">{formatHoursFromMinutes(metrics.plannedMinutes)}</Text>
+        </HStack>
+        <HStack gap="2">
+          <Text fontSize="sm" color="#778582">実績</Text>
+          <Text fontSize="lg" fontWeight="650" color="#263a37">{formatHoursFromMinutes(metrics.actualMinutes)}</Text>
+        </HStack>
+      </HStack>
 
-      {otherActiveTasks.length > 0 ? (
-        <div className="flex justify-end">
-          <QuickWorkLog
-            date={today}
-            tasks={otherActiveTasks.map((task) => ({
-              id: task.id,
-              title: task.title,
-              remainingMinutes: task.remainingMinutes ?? 0,
-            }))}
-          />
-        </div>
-      ) : null}
+      <Stack gap="3">
+        <Flex align="center" justify="space-between" gap="3" wrap="wrap">
+          <Heading size="md" color="#263a37">今日のタスク</Heading>
+          {unassignedTasks.length > 0 ? (
+            <QuickWorkLog
+              date={today}
+              tasks={unassignedTasks.map((task) => ({
+                id: task.id,
+                title: task.title,
+                remainingMinutes: task.remainingMinutes ?? 0,
+              }))}
+            />
+          ) : null}
+        </Flex>
 
-      {todaysSlices.length === 0 ? (
-        <Card className="border-dashed border-slate-300/90 bg-white/90">
-          <CardContent className="p-5 text-sm text-slate-600">今日の task はありません。</CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3">
-          {todaysSlices.map((slice, index) => {
-            const task = taskTitles.get(slice.task_id ?? "");
+        {slices.length === 0 ? (
+          <Box borderWidth="1px" borderStyle="dashed" borderColor="#d5dfdc" borderRadius="xl" bg="white" p={{ base: "5", md: "7" }}>
+            <Stack gap="2" align="flex-start">
+              <Text fontWeight="600" color="#3c504d">今日の予定はありません</Text>
+              <Text fontSize="sm" color="#71807e">タスクを追加するか、計画で今日の余力時間を確認できます。</Text>
+              <HStack gap="4" mt="1">
+                <ChakraLink asChild color="#27645d" fontWeight="600" textDecoration="underline">
+                  <NextLink href="/inbox">タスクを追加</NextLink>
+                </ChakraLink>
+                <ChakraLink asChild color="#27645d" fontWeight="600" textDecoration="underline">
+                  <NextLink href="/week">計画を確認</NextLink>
+                </ChakraLink>
+              </HStack>
+            </Stack>
+          </Box>
+        ) : (
+          <Stack gap="2.5">
+            {slices.map((slice, index) => {
+              const task = taskById.get(slice.task_id ?? "");
+              const title = task?.title ?? slice.task_id ?? "不明なタスク";
+              const dueSoon = task?.dueDate && task.dueDate <= today ? task.dueDate : null;
+              return (
+                <Flex
+                  as="article"
+                  key={`${slice.task_id ?? "task"}-${index}`}
+                  align={{ base: "flex-start", sm: "center" }}
+                  justify="space-between"
+                  gap="4"
+                  borderWidth="1px"
+                  borderColor="#e3e9e7"
+                  borderRadius="xl"
+                  bg="white"
+                  px={{ base: "4", sm: "5" }}
+                  py="4"
+                  direction={{ base: "column", sm: "row" }}
+                >
+                  <Stack minW="0" gap="1">
+                    <Text fontWeight="600" color="#243633" overflowWrap="anywhere">{title}</Text>
+                    <HStack gap="3" flexWrap="wrap">
+                      <Text fontSize="sm" color="#667673">
+                        予定 {formatHoursFromMinutes(slice.planned_minutes ?? 0)}
+                      </Text>
+                      {dueSoon ? <Text fontSize="sm" color="#a35436">期限 {formatJapaneseDate(dueSoon)}</Text> : null}
+                    </HStack>
+                  </Stack>
+                  <WorkLogDialog
+                    date={slice.date ?? today}
+                    defaultRemainingHours={(task?.remainingMinutes ?? 0) / 60}
+                    taskId={slice.task_id ?? ""}
+                    title={title}
+                  />
+                </Flex>
+              );
+            })}
+          </Stack>
+        )}
+      </Stack>
 
-            return (
-              <Card key={`${slice.task_id ?? "task"}-${index}`} className="border-white/80 bg-white/94">
-                <CardHeader className="gap-2 pb-0">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <CardTitle className="text-lg tracking-[-0.03em]">
-                        {task?.title ?? slice.task_id ?? "不明な task"}
-                      </CardTitle>
-                      <div className="flex flex-wrap gap-2">
-                        <StatusBadge>{formatIsoDate(slice.date ?? "unknown")}</StatusBadge>
-                        <StatusBadge tone="secondary">
-                          {formatHoursFromMinutes(slice.planned_minutes ?? 0)}
-                        </StatusBadge>
-                        <StatusBadge tone="outline">
-                          {taskTypeLabels[task?.taskType ?? "unknown"] ?? "未分類"}
-                        </StatusBadge>
-                        <StatusBadge tone="outline">
-                          {cognitiveLoadLabels[task?.cognitiveLoad ?? "unknown"] ?? "未設定"}
-                        </StatusBadge>
-                        <StatusBadge tone="outline">
-                          {energyLabels[task?.energy ?? "unknown"] ?? "未設定"}
-                        </StatusBadge>
-                        {task?.tags?.map((tag) => (
-                          <StatusBadge key={tag} tone="outline">
-                            {tag}
-                          </StatusBadge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="flex justify-end">
-                    <WorkLogDialog
-                      date={slice.date ?? today}
-                      defaultRemainingHours={(task?.remainingMinutes ?? 0) / 60}
-                      taskId={slice.task_id ?? ""}
-                      title={task?.title ?? slice.task_id ?? "不明な task"}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </section>
+      <PlanningAlert initialHealth={planningHealth} />
+    </Stack>
   );
 }
+
+export default HomePage;

@@ -85,23 +85,38 @@ export function formatIsoDate(date: string): string {
   return date;
 }
 
+export function formatJapaneseDate(value: string | null, withWeekday = false): string {
+  if (!value) return "-";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    ...(withWeekday ? { weekday: "short" as const } : {}),
+    timeZone: "UTC",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  const label = `${part("month")}月${part("day")}日`;
+  return withWeekday ? `${label}（${part("weekday")}）` : label;
+}
+
 export function formatDateTimeShort(value: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
-  return `${date.getMonth() + 1}/${date.getDate()} ${date
-    .getHours()
-    .toString()
-    .padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Tokyo",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("month")}月${part("day")}日 ${part("hour")}:${part("minute")}`;
 }
 
 export function formatDateTimeLong(value: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate(),
-  ).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes(),
-  ).padStart(2, "0")}`;
+  return formatDateTimeShort(value);
 }
 
 export function formatEtaMinutes(seconds: number | null): string {

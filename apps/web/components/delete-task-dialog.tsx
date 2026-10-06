@@ -1,34 +1,35 @@
 "use client";
 
-import React from "react";
+import { Button, Flex, Stack, Text } from "@chakra-ui/react";
 import { Trash2 } from "lucide-react";
-import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
 
 type DeleteTaskDialogProps = {
   taskId: string;
   title: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function DeleteTaskDialog({ taskId, title }: DeleteTaskDialogProps) {
+export function DeleteTaskDialog({ taskId, title, open, onOpenChange }: DeleteTaskDialogProps) {
   return (
     <Modal
-      description="削除すると task 本体は一覧から消えます。必要なら後で追加し直してください。"
-      title={`「${title}」を削除しますか`}
-      trigger={
-        <Button type="button" variant="outline">
-          削除
-        </Button>
-      }
+      open={open}
+      onOpenChange={onOpenChange}
+      title="タスクを削除しますか？"
+      description={title}
+      trigger={open === undefined ? <Button size="sm" variant="ghost" colorPalette="red">削除</Button> : undefined}
     >
-      <form action={`/api/tasks/${taskId}/delete`} className="grid gap-4" method="post">
-        <p className="text-sm text-slate-600">この操作は確認後すぐに反映されます。</p>
-        <div className="flex justify-end">
-          <Button type="submit" variant="warning">
-            <Trash2 className="h-4 w-4" />
-            削除する
-          </Button>
-        </div>
+      <form action={`/api/tasks/${taskId}/delete`} method="post">
+        <Stack gap="5">
+          <Text color="#657572" fontSize="sm">削除したタスクは一覧から戻せません。</Text>
+          <Flex justify="flex-end">
+            <Button type="submit" colorPalette="red">
+              <Trash2 size={16} />
+              タスクを削除
+            </Button>
+          </Flex>
+        </Stack>
       </form>
     </Modal>
   );

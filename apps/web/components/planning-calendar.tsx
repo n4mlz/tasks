@@ -1,10 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, ArrowRight, CalendarDays } from "lucide-react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import {
+  Box,
+  Button,
+  Flex,
+  Grid,
+  HStack,
+  IconButton,
+  Input,
+  Stack,
+  Text,
+} from "@chakra-ui/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Modal } from "./ui/modal";
+import { formatJapaneseDate } from "../lib/presentation";
 
 type PlanningCalendarPayload = {
   referenceDate: string;
@@ -16,9 +26,11 @@ type PlanningCalendarPayload = {
   slicesByDate: Record<string, Array<{ taskTitle: string; plannedMinutes: number }>>;
 };
 
-type PlanningCalendarProps = {
-  initialPayload: PlanningCalendarPayload;
-  today: string;
+type PlanningCalendarProps = { initialPayload: PlanningCalendarPayload; today: string };
+type SelectedDay = {
+  date: string;
+  availableMinutes: number;
+  tasks: Array<{ taskTitle: string; plannedMinutes: number }>;
 };
 
 function shiftMonth(referenceDate: string, months: number): string {
@@ -27,148 +39,195 @@ function shiftMonth(referenceDate: string, months: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-function formatHours(minutes: number): string {
-  if (minutes === 0) return "0";
-  const hours = minutes / 60;
-  return Number.isInteger(hours) ? String(hours) : String(hours);
+function hours(minutes: number): string {
+  const value = minutes / 60;
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 export function PlanningCalendar({ initialPayload, today }: PlanningCalendarProps) {
   const [payload, setPayload] = React.useState(initialPayload);
   const [jumpDate, setJumpDate] = React.useState(initialPayload.referenceDate);
   const [loading, setLoading] = React.useState(false);
-  const [openDate, setOpenDate] = React.useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = React.useState<SelectedDay | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const capacityByDate = React.useMemo(
+    () => new Map(payload.capacities.map((capacity) => [capacity.date, capacity.availableMinutes])),
+    [payload.capacities],
+  );
 
   const loadMonth = React.useCallback(async (referenceDate: string) => {
+    if (!referenceDate) return;
     setLoading(true);
+    setError(null);
     try {
-      const response = await fetch(`/api/planning-month?referenceDate=${referenceDate}`, {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        throw new Error("failed to load month");
-      }
+      const response = await fetch(`/api/planning-month?referenceDate=${referenceDate}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("failed to load month");
       const nextPayload = (await response.json()) as PlanningCalendarPayload;
       setPayload(nextPayload);
       setJumpDate(nextPayload.referenceDate);
+    } catch {
+      setError("カレンダーを読み込めませんでした。もう一度お試しください。");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const capacityMap = React.useMemo(
-    () => new Map(payload.capacities.map((capacity) => [capacity.date, capacity.availableMinutes])),
-    [payload.capacities],
-  );
+  function openDay(date: string) {
+    setSelectedDay({
+      date,
+      availableMinutes: capacityByDate.get(date) ?? 0,
+      tasks: payload.slicesByDate[date] ?? [],
+    });
+  }
+
+  const plannedMinutes = selectedDay?.tasks.reduce((sum, task) => sum + task.plannedMinutes, 0) ?? 0;
 
   return (
-    <div className="grid gap-4">
-      <div className="flex flex-wrap items-end gap-2">
-        <h2 className="mr-3 text-lg font-semibold tracking-[-0.03em] text-slate-900">
-          {payload.monthLabel}
-        </h2>
-        <Button onClick={() => loadMonth(shiftMonth(payload.referenceDate, -1))} type="button" variant="outline">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          前の月
+    <Stack gap="4" opacity={loading ? 0.65 : 1}>
+      <Flex align="center" justify="space-between" gap="3" wrap="wrap">
+        <HStack gap="2">
+          <IconButton
+            aria-label="前の月"
+            size="sm"
+            variant="outline"
+            borderColor="#d5dfdc"
+            onClick={() => void loadMonth(shiftMonth(payload.referenceDate, -1))}
+          >
+            <ChevronLeft size={18} />
+          </IconButton>
+          <Text minW="24" textAlign="center" fontSize="lg" fontWeight="650" color="#263a37">
+            {payload.monthLabel}
+          </Text>
+          <IconButton
+            aria-label="次の月"
+            size="sm"
+            variant="outline"
+            borderColor="#d5dfdc"
+            onClick={() => void loadMonth(shiftMonth(payload.referenceDate, 1))}
+          >
+            <ChevronRight size={18} />
+          </IconButton>
+        </HStack>
+        <Button size="sm" variant="outline" borderColor="#d5dfdc" onClick={() => void loadMonth(today)}>
+          今月へ
         </Button>
-        <Button onClick={() => loadMonth(today)} type="button" variant="outline">
-          今日へ戻る
-        </Button>
-        <Button onClick={() => loadMonth(shiftMonth(payload.referenceDate, 1))} type="button" variant="outline">
-          次の月
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-        <form
-          className="flex flex-wrap items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void loadMonth(jumpDate);
-          }}
-        >
-          <label className="grid gap-1 text-sm font-medium text-slate-700">
-            基準日
-            <Input
-              aria-label="基準日"
-              onChange={(event) => setJumpDate(event.target.value)}
-              type="date"
-              value={jumpDate}
-            />
-          </label>
-          <Button type="submit">移動</Button>
-        </form>
-      </div>
+      </Flex>
 
-      <div className="grid grid-cols-7 border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500 sm:text-xs sm:tracking-[0.08em]">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label) => (
-          <div key={label} className="bg-slate-50 px-1.5 py-2 text-center sm:px-3">
-            {label}
-          </div>
-        ))}
-      </div>
-      <div
-        className={`grid grid-cols-7 overflow-hidden rounded-b-2xl border border-t-0 border-slate-200 bg-slate-200 ${loading ? "opacity-60" : ""}`}
+      <Flex as="form" align="end" gap="2" wrap="wrap" onSubmit={(event) => {
+        event.preventDefault();
+        void loadMonth(jumpDate);
+      }}>
+        <label style={{ flex: "1 1 10rem" }}>
+          <Text mb="1" fontSize="xs" fontWeight="600" color="#71807e">日付へ移動</Text>
+          <Input
+            aria-label="日付へ移動"
+            type="date"
+            value={jumpDate}
+            onChange={(event) => setJumpDate(event.target.value)}
+            borderColor="#d5dfdc"
+            bg="white"
+          />
+        </label>
+        <Button type="submit" variant="outline" borderColor="#d5dfdc">移動</Button>
+      </Flex>
+
+      {error ? <Text role="alert" color="red.700" fontSize="sm">{error}</Text> : null}
+
+      <Grid
+        templateColumns="repeat(7, minmax(0, 1fr))"
+        gap="0"
+        borderWidth="1px"
+        borderColor="#dce5e2"
+        borderRadius="lg"
+        overflow="hidden"
       >
-        {payload.calendarDays.map((date) => {
-          const availableMinutes = capacityMap.get(date) ?? 0;
-          const slices = payload.slicesByDate[date] ?? [];
-          const plannedMinutes = slices.reduce((sum, slice) => sum + slice.plannedMinutes, 0);
+        {["月", "火", "水", "木", "金", "土", "日"].map((day, index) => (
+          <Text
+            key={day}
+            py="1.5"
+            textAlign="center"
+            fontSize="xs"
+            fontWeight="600"
+            color="#73817e"
+            bg="#f7f9f8"
+            borderRightWidth={index === 6 ? "0" : "1px"}
+            borderBottomWidth="1px"
+            borderColor="#dce5e2"
+          >
+            {day}
+          </Text>
+        ))}
+        {payload.calendarDays.map((date, index) => {
+          const capacity = capacityByDate.get(date) ?? 0;
+          const assigned = payload.slicesByDate[date] ?? [];
           const inMonth = date >= payload.monthStart && date <= payload.monthEnd;
           const isToday = date === today;
-
+          const allocated = assigned.reduce((sum, item) => sum + item.plannedMinutes, 0);
           return (
-            <Modal
+            <Button
               key={date}
-              description={plannedMinutes > 0 ? `配分 ${formatHours(plannedMinutes)} 時間` : "配分はありません"}
-              onOpenChange={(open) => setOpenDate(open ? date : openDate === date ? null : openDate)}
-              open={openDate === date}
-              title={`${date} の余力時間`}
-              trigger={
-                <button
-                  aria-label={`${date} を編集`}
-                  className={`min-h-24 border-r border-b border-slate-200 px-1.5 py-2 text-left last:border-r-0 sm:min-h-28 sm:px-2 sm:py-2.5 lg:min-h-32 lg:px-3 lg:py-3 ${inMonth ? "bg-white hover:bg-slate-50" : "bg-slate-50 text-slate-400 hover:bg-slate-100"} ${isToday ? "bg-amber-50 ring-2 ring-inset ring-amber-300" : ""}`}
-                  type="button"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-1 sm:mb-3 sm:gap-2">
-                    <span
-                      className={`text-xs font-semibold sm:text-sm ${isToday ? "text-amber-900" : "text-slate-900"}`}
-                    >
-                      {Number(date.slice(8, 10))}
-                    </span>
-                    {isToday ? <CalendarDays className="h-3.5 w-3.5 text-amber-700 sm:h-4 sm:w-4" /> : null}
-                  </div>
-                  <div
-                    className={`text-[11px] leading-tight sm:text-xs lg:text-sm ${availableMinutes > 0 ? "text-slate-700" : "text-slate-400"}`}
-                  >
-                    {availableMinutes > 0 ? `${formatHours(availableMinutes)} 時間` : "未設定"}
-                  </div>
-                  {slices.length > 0 ? (
-                    <div className="mt-2 grid gap-0.5 text-[10px] leading-tight text-slate-500 sm:mt-3 sm:gap-1 sm:text-[11px] lg:text-xs">
-                      {slices.slice(0, 2).map((slice) => (
-                        <div key={`${date}-${slice.taskTitle}`} className="truncate">
-                          {slice.taskTitle} {formatHours(slice.plannedMinutes)}h
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </button>
-              }
+              type="button"
+              variant="plain"
+              aria-label={`${date}、余力 ${capacity > 0 ? `${hours(capacity)}時間` : "未設定"}、予定 ${hours(allocated)}時間`}
+              onClick={() => openDay(date)}
+              display="flex"
+              minW="0"
+              h={{ base: "16", sm: "20", lg: "24" }}
+              p={{ base: "1", sm: "2" }}
+              flexDir="column"
+              alignItems="center"
+              justifyContent="center"
+              gap="1"
+              borderWidth="0"
+              borderRightWidth={index % 7 === 6 ? "0" : "1px"}
+              borderBottomWidth={index >= payload.calendarDays.length - 7 ? "0" : "1px"}
+              borderColor="#dce5e2"
+              borderRadius="0"
+              bg={isToday ? "#eaf3f0" : inMonth ? "white" : "#f4f6f5"}
+              color={inMonth ? "#3d504d" : "#9ba6a3"}
+              fontWeight={isToday ? "700" : "500"}
+              boxShadow={isToday ? "inset 0 0 0 1px #4d8d82" : undefined}
+              _hover={{ bg: isToday ? "#e1efeb" : "#f0f6f4" }}
             >
-              <CalendarEditForm
-                availableHours={availableMinutes === 0 ? "" : formatHours(availableMinutes)}
-                date={date}
-                onSaved={async () => {
-                  setOpenDate(null);
-                  await loadMonth(payload.referenceDate);
-                }}
-                tasks={slices.map(
-                  (slice) => `${slice.taskTitle} ${formatHours(slice.plannedMinutes)} 時間`,
-                )}
-              />
-            </Modal>
+              <Text fontSize={{ base: "xs", sm: "sm" }}>{Number(date.slice(8, 10))}</Text>
+              <Text fontSize={{ base: "10px", sm: "xs" }} color={capacity ? "#376b61" : "#9ba6a3"}>
+                {capacity ? `${hours(capacity)}h` : "—"}
+              </Text>
+              {assigned.length > 0 ? <Box w="1.5" h="1.5" borderRadius="full" bg="#418478" aria-hidden="true" /> : null}
+            </Button>
           );
         })}
-      </div>
-    </div>
+      </Grid>
+
+      <Flex gap="2" flexWrap="wrap" fontSize="xs" color="#71807e">
+        <Box w="1.5" h="1.5" borderRadius="full" bg="#418478" />
+        <Text>予定がある日</Text>
+        <Text>数字は余力時間、— は未設定</Text>
+        <Text>日付を選ぶと余力時間と配分を編集できます。</Text>
+      </Flex>
+
+      <Modal
+        open={selectedDay !== null}
+        onOpenChange={(open) => { if (!open) setSelectedDay(null); }}
+        title={selectedDay ? formatJapaneseDate(selectedDay.date, true) : "日付"}
+        description={selectedDay ? `予定 ${hours(plannedMinutes)}時間` : undefined}
+      >
+        {selectedDay ? (
+          <CalendarEditForm
+            key={selectedDay.date}
+            date={selectedDay.date}
+            availableHours={selectedDay.availableMinutes ? hours(selectedDay.availableMinutes) : ""}
+            tasks={selectedDay.tasks}
+            onSaved={async () => {
+              setSelectedDay(null);
+              await loadMonth(payload.referenceDate);
+              window.dispatchEvent(new Event("task-platform:planning-changed"));
+            }}
+          />
+        ) : null}
+      </Modal>
+    </Stack>
   );
 }
 
@@ -180,65 +239,67 @@ function CalendarEditForm({
 }: {
   date: string;
   availableHours: string;
-  tasks: string[];
+  tasks: Array<{ taskTitle: string; plannedMinutes: number }>;
   onSaved: () => Promise<void> | void;
 }) {
-  const [hours, setHours] = React.useState(availableHours);
+  const [hoursValue, setHoursValue] = React.useState(availableHours);
   const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(false);
+  const planned = tasks.reduce((sum, task) => sum + task.plannedMinutes, 0);
 
   return (
-    <form
-      className="grid gap-4"
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setSaving(true);
-        try {
-          const response = await fetch("/api/capacity", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              date,
-              availableMinutes: Number(hours || "0"),
-            }),
-          });
-          if (!response.ok) {
-            throw new Error("failed to save capacity");
-          }
-          await onSaved();
-          window.dispatchEvent(new Event("task-platform:planning-changed"));
-        } finally {
-          setSaving(false);
-        }
-      }}
-    >
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
-        余力時間 (時間)
-        <Input
-          aria-label="余力時間 (時間)"
-          inputMode="decimal"
-          min="0"
-          onChange={(event) => setHours(event.target.value)}
-          placeholder="0"
-          step="0.25"
-          type="number"
-          value={hours}
-        />
-      </label>
-      {tasks.length > 0 ? (
-        <div className="grid gap-1 text-sm text-slate-600">
-          <span className="font-medium text-slate-900">この日の配分</span>
-          {tasks.map((task) => (
-            <div key={task}>{task}</div>
-          ))}
-        </div>
-      ) : null}
-      <div className="flex justify-end">
-        <Button disabled={saving} type="submit">
-          保存
-        </Button>
-      </div>
-    </form>
+    <Box as="form" onSubmit={async (event) => {
+      event.preventDefault();
+      setSaving(true);
+      setError(false);
+      try {
+        const response = await fetch("/api/capacity", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, availableMinutes: Number(hoursValue || "0") }),
+        });
+        if (!response.ok) throw new Error("failed to save capacity");
+        await onSaved();
+      } catch {
+        setError(true);
+      } finally {
+        setSaving(false);
+      }
+    }}>
+      <Stack gap="5">
+        {error ? <Text role="alert" fontSize="sm" color="red.700">保存できませんでした。もう一度お試しください。</Text> : null}
+        <Box>
+          <Text fontSize="sm" color="#71807e">この日に使える時間</Text>
+          <Flex align="center" gap="2" mt="2">
+            <Input
+              aria-label="余力時間（時間）"
+              inputMode="decimal"
+              min="0"
+              step="0.25"
+              type="number"
+              value={hoursValue}
+              onChange={(event) => setHoursValue(event.target.value)}
+              placeholder="0"
+              borderColor="#d5dfdc"
+            />
+            <Text color="#71807e">時間</Text>
+          </Flex>
+        </Box>
+        <Box>
+          <Text fontSize="sm" color="#71807e">予定時間: {hours(planned)}時間</Text>
+          {tasks.length > 0 ? (
+            <Stack mt="2" gap="2">
+              {tasks.map((task) => (
+                <Flex key={`${task.taskTitle}-${task.plannedMinutes}`} justify="space-between" gap="3" borderBottomWidth="1px" borderColor="#edf0ef" pb="2">
+                  <Text fontSize="sm" color="#344845" overflowWrap="anywhere">{task.taskTitle}</Text>
+                  <Text flexShrink="0" fontSize="sm" color="#667673">{hours(task.plannedMinutes)}時間</Text>
+                </Flex>
+              ))}
+            </Stack>
+          ) : <Text mt="2" fontSize="sm" color="#8a9693">この日の予定はありません。</Text>}
+        </Box>
+        <Button type="submit" colorPalette="teal" loading={saving} alignSelf="flex-end">余力時間を保存</Button>
+      </Stack>
+    </Box>
   );
 }

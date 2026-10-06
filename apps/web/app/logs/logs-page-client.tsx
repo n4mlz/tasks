@@ -1,16 +1,14 @@
 "use client";
 
 import React from "react";
-import { StatusBadge } from "../../components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Badge, Box, Button, Flex, HStack, Stack, Text } from "@chakra-ui/react";
 import {
   formatDateTimeLong,
-  formatEtaMinutes,
   schedulerRunReasonLabels,
   schedulerRunStatusLabels,
 } from "../../lib/presentation";
 
-type SchedulerStatus = {
+export type SchedulerStatus = {
   schedulerStatus: string;
   lastScheduledAt: string | null;
   latestRunAt: string | null;
@@ -18,7 +16,7 @@ type SchedulerStatus = {
   secondsUntilNextRun: number | null;
 };
 
-type Run = {
+export type SchedulerRun = {
   id: string;
   targetRevision: number;
   status: string;
@@ -30,127 +28,137 @@ type Run = {
   errorMessage: string;
 };
 
-function useRuns(initialRuns: Run[]) {
-  const [runs, setRuns] = React.useState<Run[]>(initialRuns);
-  const [cursor, setCursor] = React.useState<string | null>(
-    initialRuns.length > 0 ? initialRuns.at(-1)?.startedAt ?? null : null,
-  );
-  const [hasMore, setHasMore] = React.useState(true);
+function useRuns(initialRuns: SchedulerRun[]) {
+  const [runs, setRuns] = React.useState(initialRuns);
+  const [cursor, setCursor] = React.useState<string | null>(initialRuns.at(-1)?.startedAt ?? null);
+  const [hasMore, setHasMore] = React.useState(initialRuns.length === 20);
   const [loading, setLoading] = React.useState(false);
-  const observerRef = React.useRef<HTMLDivElement | null>(null);
+  const [error, setError] = React.useState(false);
 
-  React.useEffect(() => {
-    const current = observerRef.current;
-    if (!current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loading) {
-          setLoading(true);
-          const params = new URLSearchParams();
-          if (cursor) params.set("cursor", cursor);
-          params.set("limit", "20");
-          fetch(`/api/scheduler-runs?${params.toString()}`)
-            .then((res) => res.json())
-            .then((data: { runs: Run[]; nextCursor: string | null }) => {
-              setRuns((prev) => [...prev, ...data.runs]);
-              setCursor(data.nextCursor);
-              setHasMore(data.nextCursor !== null);
-            })
-            .catch(() => {})
-            .finally(() => setLoading(false));
-        }
-      },
-      { rootMargin: "200px" },
-    );
-
-    observer.observe(current);
-    return () => observer.disconnect();
+  const loadMore = React.useCallback(async () => {
+    if (!hasMore || loading) return;
+    setLoading(true);
+    setError(false);
+    const params = new URLSearchParams({ limit: "20" });
+    if (cursor) params.set("cursor", cursor);
+    try {
+      const response = await fetch(`/api/scheduler-runs?${params.toString()}`);
+      if (!response.ok) throw new Error("failed to load history");
+      const data = (await response.json()) as { runs: SchedulerRun[]; nextCursor: string | null };
+      setRuns((previous) => [...previous, ...data.runs]);
+      setCursor(data.nextCursor);
+      setHasMore(data.nextCursor !== null);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [cursor, hasMore, loading]);
 
-  return { runs, loading, observerRef };
+  return { runs, loading, error, hasMore, loadMore };
 }
 
 export function LogsPageClient({
-  status,
+  status: initialStatus,
   initialRuns,
-}: Readonly<{
-  status: SchedulerStatus;
-  initialRuns: Run[];
-}>) {
-  const { runs, loading, observerRef } = useRuns(initialRuns);
+}: Readonly<{ status: SchedulerStatus; initialRuns: SchedulerRun[] }>) {
+  const [status, setStatus] = React.useState(initialStatus);
+  const [busy, setBusy] = React.useState(false);
+  const [actionError, setActionError] = React.useState(false);
+  const { runs, loading, error, hasMore, loadMore } = useRuns(initialRuns);
+  const stateLabel = status.schedulerStatus === "failed"
+    ? "配分を確認"
+    : status.schedulerStatus === "running"
+      ? "再配分中"
+      : status.hasPendingChanges
+        ? "再配分待ち"
+        : "配分済み";
+
+  async function runAction(path: string, body?: object) {
+    setBusy(true);
+    setActionError(false);
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: body ? { "content-type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("scheduler action failed");
+      const result = (await response.json()) as { status: SchedulerStatus };
+      setStatus(result.status);
+      window.dispatchEvent(new Event("task-platform:planning-changed"));
+    } catch {
+      setActionError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">ログ</h1>
-        <StatusBadge
-          tone={
-            status.schedulerStatus === "running"
-              ? "warning"
-              : status.hasPendingChanges
-                ? "secondary"
-                : "outline"
-          }
-        >
-          {status.schedulerStatus === "running"
-            ? "再配分中"
-            : status.hasPendingChanges
-              ? "再配分待ち"
-              : "最新"}
-        </StatusBadge>
-        <StatusBadge tone="outline">
-          {`最終再配分 ${formatDateTimeLong(status.lastScheduledAt)}`}
-        </StatusBadge>
-        {status.hasPendingChanges ? (
-          <StatusBadge tone="outline">{`次回 ${formatEtaMinutes(
-            status.secondsUntilNextRun,
-          )}`}</StatusBadge>
-        ) : null}
-      </div>
-
-      <Card className="border-white/80 bg-white/94">
-        <CardHeader>
-          <CardTitle className="text-lg tracking-[-0.03em]">再配分ログ</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 text-sm text-slate-700">
-          {runs.map((run) => (
-            <div key={run.id} className="rounded-2xl border border-slate-200 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
-                  tone={
-                    run.status === "failed"
-                      ? "danger"
-                      : run.status === "scheduled"
-                        ? "success"
-                        : "outline"
-                  }
-                >
-                  {schedulerRunStatusLabels[run.status] ?? run.status}
-                </StatusBadge>
-                <StatusBadge tone="secondary">{`rev ${run.targetRevision}`}</StatusBadge>
-                <span>{formatDateTimeLong(run.startedAt)}</span>
-              </div>
-              <div className="mt-2 text-slate-600">
-                {schedulerRunReasonLabels[run.reason] ?? run.reason}
-              </div>
-              {run.rationale ? <div className="mt-1 text-slate-500">{run.rationale}</div> : null}
-              {run.validation?.errors?.length ? (
-                <div className="mt-2 text-rose-600">
-                  {`検証エラー: ${run.validation.errors.join(", ")}`}
-                </div>
-              ) : null}
-              {run.errorMessage ? (
-                <div className="mt-2 text-rose-600">{`実行エラー: ${run.errorMessage}`}</div>
-              ) : null}
-            </div>
-          ))}
-          <div ref={observerRef} className="h-4" />
-          {loading ? (
-            <p className="text-center text-sm text-slate-400">読み込み中...</p>
+    <Stack gap="5">
+      <Flex align="center" justify="space-between" gap="4" wrap="wrap" borderWidth="1px" borderColor="#e2e9e6" borderRadius="xl" bg="white" px="4" py="3">
+        <HStack gap="3" flexWrap="wrap">
+          <Badge colorPalette={status.schedulerStatus === "failed" ? "red" : status.hasPendingChanges ? "orange" : status.schedulerStatus === "running" ? "blue" : "green"}>
+            {stateLabel}
+          </Badge>
+          <Text fontSize="sm" color="#667673">最終更新 {formatDateTimeLong(status.lastScheduledAt)}</Text>
+        </HStack>
+        <HStack gap="2" flexWrap="wrap">
+          {status.hasPendingChanges && status.schedulerStatus !== "running" ? (
+            <Button size="sm" variant="outline" borderColor="#d5dfdc" loading={busy} onClick={() => void runAction("/api/scheduler/delay")}>
+              3分待つ
+            </Button>
           ) : null}
-        </CardContent>
-      </Card>
-    </section>
+          {status.schedulerStatus === "running" ? (
+            <Button size="sm" variant="outline" colorPalette="red" loading={busy} onClick={() => void runAction("/api/scheduler/cancel")}>
+              配分を中止
+            </Button>
+          ) : (
+            <Button size="sm" colorPalette="teal" loading={busy} onClick={() => void runAction("/api/scheduler/tick", { force: true })}>
+              今すぐ再配分
+            </Button>
+          )}
+        </HStack>
+      </Flex>
+      {actionError ? <Text role="alert" fontSize="sm" color="red.700">操作を完了できませんでした。時間をおいて再度お試しください。</Text> : null}
+
+      <Stack gap="2">
+        <Text fontSize="sm" fontWeight="600" color="#526360">過去の再配分</Text>
+        {runs.map((run) => {
+          const failed = run.status === "failed" || Boolean(run.errorMessage) || Boolean(run.validation?.errors?.length);
+          return (
+            <Box key={run.id} borderWidth="1px" borderColor={failed ? "#eed7d0" : "#e3e9e7"} borderRadius="lg" bg="white" px="4" py="3">
+              <Flex align="center" justify="space-between" gap="3" wrap="wrap">
+                <HStack gap="3" flexWrap="wrap">
+                  <Badge colorPalette={failed ? "red" : run.status === "scheduled" ? "green" : "gray"}>
+                    {schedulerRunStatusLabels[run.status] ?? run.status}
+                  </Badge>
+                  <Text fontSize="sm" color="#526360">{schedulerRunReasonLabels[run.reason] ?? run.reason}</Text>
+                </HStack>
+                <Text fontSize="sm" color="#71807e">{formatDateTimeLong(run.startedAt)}</Text>
+              </Flex>
+              {failed ? (
+                <details>
+                  <summary style={{ cursor: "pointer", marginTop: "0.5rem", color: "#8b4a36", fontSize: "0.875rem" }}>失敗の詳細</summary>
+                  <Stack mt="2" gap="1" fontSize="sm" color="#8b4a36">
+                    {run.errorMessage ? <Text>{run.errorMessage}</Text> : null}
+                    {run.validation?.errors?.map((item) => <Text key={item}>{item}</Text>)}
+                    {run.rationale ? <Text>{run.rationale}</Text> : null}
+                  </Stack>
+                </details>
+              ) : null}
+            </Box>
+          );
+        })}
+        {runs.length === 0 ? <Text py="4" color="#71807e" fontSize="sm">再配分履歴はまだありません。</Text> : null}
+        {hasMore ? (
+          <Button alignSelf="center" variant="outline" borderColor="#d5dfdc" loading={loading} onClick={() => void loadMore()}>
+            さらに読み込む
+          </Button>
+        ) : null}
+        {error ? <Text role="alert" textAlign="center" color="red.700" fontSize="sm">履歴を読み込めませんでした。もう一度お試しください。</Text> : null}
+      </Stack>
+    </Stack>
   );
 }

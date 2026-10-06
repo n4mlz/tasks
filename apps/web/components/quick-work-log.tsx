@@ -33,7 +33,7 @@ export function QuickWorkLog({
       selectedTaskId={selectedTaskId}
       taskId={selectedTask.id}
       title={selectedTask.title}
-      triggerLabel="他の task を記録"
+      triggerLabel="別のタスクを記録"
     />
   );
 }

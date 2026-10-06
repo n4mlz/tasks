@@ -1,33 +1,24 @@
 "use client";
 
 import * as React from "react";
-import { LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Textarea } from "./ui/textarea";
+import { Box, Button, Grid, Input, Stack, Text, Textarea } from "@chakra-ui/react";
 
 export function TaskIntakeFlow() {
   const router = useRouter();
-  const [draft, setDraft] = React.useState({
-    title: "",
-    remainingMinutes: "",
-    dueDate: "",
-    notes: "",
-  });
+  const [draft, setDraft] = React.useState({ title: "", remainingMinutes: "", dueDate: "", notes: "" });
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
 
   return (
-    <form
-      className="grid gap-4"
+    <Box
+      as="form"
       onSubmit={async (event) => {
         event.preventDefault();
         setLoading(true);
         setError(null);
         setMessage(null);
-
         try {
           const response = await fetch("/api/tasks", {
             method: "POST",
@@ -38,14 +29,8 @@ export function TaskIntakeFlow() {
             const body = (await response.json().catch(() => null)) as { error?: string } | null;
             throw new Error(body?.error ?? "create_failed");
           }
-
-          setDraft({
-            title: "",
-            remainingMinutes: "",
-            dueDate: "",
-            notes: "",
-          });
-          setMessage("保存しました。変更が落ち着いてから自動で再配分します。");
+          setDraft({ title: "", remainingMinutes: "", dueDate: "", notes: "" });
+          setMessage("保存しました。内容が落ち着くと自動で計画に反映されます。");
           window.dispatchEvent(new Event("task-platform:planning-changed"));
           router.refresh();
         } catch (submitError) {
@@ -55,53 +40,75 @@ export function TaskIntakeFlow() {
         }
       }}
     >
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
-        タイトル
-        <Input
-          name="title"
-          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-          value={draft.title}
-        />
-      </label>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          必要な時間 (時間)
+      <Stack gap="4">
+        <label>
+          <Text mb="1.5" fontSize="sm" fontWeight="600" color="#415552">タスク名</Text>
           <Input
-            min="0.25"
-            name="remainingMinutes"
-            onChange={(event) => setDraft((current) => ({ ...current, remainingMinutes: event.target.value }))}
-            step="0.25"
-            type="number"
-            value={draft.remainingMinutes}
+            name="title"
+            required
+            value={draft.title}
+            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+            placeholder="例: 資料を読む"
+            borderColor="#d5dfdc"
+            bg="white"
           />
         </label>
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          期限
-          <Input
-            name="dueDate"
-            onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
-            type="date"
-            value={draft.dueDate}
-          />
-        </label>
-      </div>
-      <label className="grid gap-2 text-sm font-medium text-slate-700">
-        メモ
-        <Textarea
-          name="notes"
-          onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-          rows={4}
-          value={draft.notes}
-        />
-      </label>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button disabled={loading} type="submit">
-          {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-          追加
-        </Button>
-        {message ? <p className="text-sm text-slate-600">{message}</p> : null}
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-      </div>
-    </form>
+        <Grid templateColumns={{ base: "1fr", sm: "1fr 1fr" }} gap="3">
+          <label>
+            <Text mb="1.5" fontSize="sm" fontWeight="600" color="#415552">必要な時間</Text>
+            <Input
+              min="0.25"
+              name="remainingMinutes"
+              required
+              step="0.25"
+              type="number"
+              inputMode="decimal"
+              value={draft.remainingMinutes}
+              onChange={(event) => setDraft((current) => ({ ...current, remainingMinutes: event.target.value }))}
+              placeholder="時間"
+              borderColor="#d5dfdc"
+              bg="white"
+            />
+          </label>
+          <label>
+            <Text mb="1.5" fontSize="sm" fontWeight="600" color="#415552">期限（任意）</Text>
+            <Input
+              name="dueDate"
+              type="date"
+              value={draft.dueDate}
+              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+              borderColor="#d5dfdc"
+              bg="white"
+            />
+          </label>
+        </Grid>
+        <details>
+          <summary style={{ cursor: "pointer", color: "#526360", fontSize: "0.875rem" }}>メモを追加</summary>
+          <Box mt="3">
+            <Textarea
+              name="notes"
+              rows={3}
+              value={draft.notes}
+              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+              placeholder="タスクについての補足"
+              borderColor="#d5dfdc"
+              bg="white"
+            />
+          </Box>
+        </details>
+        <Box>
+          <Button
+            type="submit"
+            loading={loading}
+            disabled={!draft.title.trim() || !draft.remainingMinutes}
+            colorPalette="teal"
+          >
+            タスクを追加
+          </Button>
+          {message ? <Text mt="2" role="status" fontSize="sm" color="#27645d">{message}</Text> : null}
+          {error ? <Text mt="2" role="alert" fontSize="sm" color="red.700">{error}</Text> : null}
+        </Box>
+      </Stack>
+    </Box>
   );
 }

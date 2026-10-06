@@ -1,24 +1,8 @@
 import React from "react";
-import { PlanningCalendar } from "../../components/planning-calendar";
+import { Box, Heading, Stack, Text } from "@chakra-ui/react";
 import { PlanningAlert } from "../../components/planning-alert";
-import { StatusBadge } from "../../components/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
+import { PlanningCalendar } from "../../components/planning-calendar";
 import { taskPlatform } from "../../lib/task-platform";
-import {
-  cognitiveLoadLabels,
-  energyLabels,
-  formatCompletionRate,
-  formatHoursFromMinutes,
-  taskTypeLabels,
-} from "../../lib/presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -28,290 +12,108 @@ function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-function startOfMonth(date: string): string {
+function monthStart(date: string): string {
   return `${date.slice(0, 7)}-01`;
 }
 
-function endOfMonth(date: string): string {
-  const value = new Date(`${date.slice(0, 7)}-01T00:00:00.000Z`);
+function monthEnd(date: string): string {
+  const value = new Date(`${monthStart(date)}T00:00:00.000Z`);
   value.setUTCMonth(value.getUTCMonth() + 1);
   value.setUTCDate(0);
   return value.toISOString().slice(0, 10);
 }
 
-function startOfCalendar(date: string): string {
-  const value = new Date(`${startOfMonth(date)}T00:00:00.000Z`);
-  const day = value.getUTCDay();
-  const offset = day === 0 ? 6 : day - 1;
+function calendarStart(date: string): string {
+  const value = new Date(`${monthStart(date)}T00:00:00.000Z`);
+  const offset = (value.getUTCDay() + 6) % 7;
   value.setUTCDate(value.getUTCDate() - offset);
   return value.toISOString().slice(0, 10);
 }
 
-function endOfCalendar(date: string): string {
-  const value = new Date(`${endOfMonth(date)}T00:00:00.000Z`);
-  const day = value.getUTCDay();
-  const offset = day === 0 ? 0 : 7 - day;
-  value.setUTCDate(value.getUTCDate() + offset);
-  return value.toISOString().slice(0, 10);
+function calendarEnd(date: string): string {
+  const end = new Date(`${monthEnd(date)}T00:00:00.000Z`);
+  const offset = (7 - ((end.getUTCDay() + 6) % 7) - 1) % 7;
+  end.setUTCDate(end.getUTCDate() + offset);
+  return end.toISOString().slice(0, 10);
 }
 
-function buildCalendarDays(referenceDate: string): string[] {
-  const days: string[] = [];
-  for (
-    let current = startOfCalendar(referenceDate);
-    current <= endOfCalendar(referenceDate);
-    current = addDays(current, 1)
-  ) {
-    days.push(current);
-  }
-
-  return days;
+function listCalendarDays(referenceDate: string): string[] {
+  const first = calendarStart(referenceDate);
+  const last = calendarEnd(referenceDate);
+  const result: string[] = [];
+  for (let date = first; date <= last; date = addDays(date, 1)) result.push(date);
+  return result;
 }
 
-function formatMonthHeading(date: string): string {
+function formatMonth(date: string): string {
   const [year, month] = date.split("-");
   return `${year}年${Number(month)}月`;
 }
 
-export default async function WeekPage(props: {
-  searchParams?: Promise<{ referenceDate?: string; showCompleted?: string }>;
-} = {}) {
+type WeekPageProps = {
+  searchParams?: Promise<{ referenceDate?: string }>;
+};
+
+async function WeekPage(): Promise<React.ReactElement>;
+async function WeekPage(props: WeekPageProps): Promise<React.ReactElement>;
+async function WeekPage(props: WeekPageProps = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const searchParams = (await props.searchParams) ?? {};
   const referenceDate = searchParams.referenceDate || today;
-  const showCompleted = searchParams.showCompleted === "1";
-  const monthStart = startOfMonth(referenceDate);
-  const monthEnd = endOfMonth(referenceDate);
-  const calendarDays = buildCalendarDays(referenceDate);
-  const calendarStart = calendarDays[0] ?? monthStart;
-  const calendarEnd = calendarDays.at(-1) ?? monthEnd;
+  const days = listCalendarDays(referenceDate);
+  const first = days[0] ?? monthStart(referenceDate);
+  const last = days.at(-1) ?? monthEnd(referenceDate);
 
-  const capacities = (await taskPlatform.getCapacities(calendarStart, calendarEnd)) as Array<{
-    date: string;
-    availableMinutes: number;
-  }>;
-  const metrics = (await taskPlatform.getMetrics(monthStart, monthEnd)) as {
-    plannedMinutes: number;
-    actualMinutes: number;
-    atRiskTaskCount: number;
-  };
-  const planningHealth = (await taskPlatform.getPlanningHealth()) as {
-    missingCapacityDatesWithin7Days: string[];
-    warningCount: number;
-    hasInsufficientCapacity?: boolean;
-    shortfallMinutes?: number;
-    horizonEnd?: string;
-  };
-  const schedule = (await taskPlatform.getCurrentSchedule()) as {
-    activeScheduleId: string | null;
-    summary?: {
-      bufferUsageByDate?: Record<string, number>;
-      datesUsingReserve?: string[];
-      insufficientEvenWithReserve?: boolean;
-    } | null;
-    slices: Array<{
-      task_id?: string;
-      date?: string;
-      planned_minutes?: number;
-    }>;
-  };
-  const tasks = (await taskPlatform.listTasks()) as Array<{
-    id: string;
-    title: string;
-    remainingMinutes: number;
-    dueDate: string | null;
-    status: string;
-    taskType?: string;
-    cognitiveLoad?: string;
-    energy?: string;
-    tags?: string[];
-    updatedAt?: string;
-  }>;
-  const workLogs = (await taskPlatform.getWorkLogs(tasks.map((task) => task.id))) as Array<{
-    taskId: string;
-    spentMinutes: number;
-  }>;
+  const [capacities, schedule, tasks, planningHealth] = await Promise.all([
+    taskPlatform.getCapacities(first, last),
+    taskPlatform.getCurrentSchedule(),
+    taskPlatform.listTasks(),
+    taskPlatform.getPlanningHealth(),
+  ]);
 
-  const slicesByDate = new Map<string, Array<{ taskId: string; plannedMinutes: number }>>();
-  for (const slice of schedule.slices) {
-    if (!slice.date || !slice.task_id) continue;
-    const current = slicesByDate.get(slice.date) ?? [];
-    current.push({
-      taskId: slice.task_id,
-      plannedMinutes: slice.planned_minutes ?? 0,
-    });
-    slicesByDate.set(slice.date, current);
-  }
-
-  const taskMap = new Map(tasks.map((task) => [task.id, task]));
-  const monthReserveMinutes = Object.entries(schedule.summary?.bufferUsageByDate ?? {})
-    .filter(([date]) => date >= monthStart && date <= monthEnd)
-    .reduce((sum, [, minutes]) => sum + Number(minutes), 0);
-  const spentMinutesByTask = new Map<string, number>();
-  for (const workLog of workLogs) {
-    spentMinutesByTask.set(
-      workLog.taskId,
-      (spentMinutesByTask.get(workLog.taskId) ?? 0) + workLog.spentMinutes,
-    );
-  }
-
-  const taskOverview = (showCompleted
-    ? tasks
-        .filter((task) => task.status === "done")
-        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
-    : tasks.filter((task) => task.status !== "done" && task.status !== "archived")
-  )
-    .map((task) => {
-      const slices = schedule.slices
-        .filter((slice) => slice.task_id === task.id)
-        .sort((left, right) => String(left.date).localeCompare(String(right.date)));
-      const spentMinutes = spentMinutesByTask.get(task.id) ?? 0;
-      const totalMinutes = spentMinutes + task.remainingMinutes;
-      const endDate = slices.at(-1)?.date ?? null;
-      const upcomingSchedule = slices
-        .slice(0, 3)
-        .map((slice) => `${slice.date} ${formatHoursFromMinutes(slice.planned_minutes ?? 0)}`);
-
-      return {
-        ...task,
-        spentMinutes,
-        totalMinutes,
-        endDate,
-        upcomingSchedule,
-      };
-    })
-    .sort((left, right) => {
-      if (left.dueDate && right.dueDate) return left.dueDate.localeCompare(right.dueDate);
-      if (left.dueDate) return -1;
-      if (right.dueDate) return 1;
-      return left.title.localeCompare(right.title);
-    });
+  const taskById = new Map((tasks as Array<{ id: string; title: string }>).map((task) => [task.id, task.title]));
+  const scheduleSlices = (schedule as {
+    slices: Array<{ task_id?: string; date?: string; planned_minutes?: number }>;
+  }).slices;
+  const slicesByDate = Object.fromEntries(
+    days.map((date) => [
+      date,
+      scheduleSlices
+        .filter((slice) => slice.date === date && slice.task_id)
+        .map((slice) => ({
+          taskTitle: taskById.get(slice.task_id!) ?? slice.task_id!,
+          plannedMinutes: slice.planned_minutes ?? 0,
+        })),
+    ]),
+  );
 
   const calendarPayload = {
     referenceDate,
-    monthLabel: formatMonthHeading(referenceDate),
-    calendarDays,
-    monthStart,
-    monthEnd,
-    capacities,
-    slicesByDate: Object.fromEntries(
-      calendarDays.map((date) => [
-        date,
-        (slicesByDate.get(date) ?? []).map((slice) => ({
-          taskTitle: taskMap.get(slice.taskId)?.title ?? slice.taskId,
-          plannedMinutes: slice.plannedMinutes,
-        })),
-      ]),
-    ),
+    monthLabel: formatMonth(referenceDate),
+    calendarDays: days,
+    monthStart: monthStart(referenceDate),
+    monthEnd: monthEnd(referenceDate),
+    capacities: capacities as Array<{ date: string; availableMinutes: number }>,
+    slicesByDate,
   };
 
   return (
-    <section className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">計画</h1>
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge>{referenceDate.slice(0, 7)}</StatusBadge>
-          <a
-            href={
-              showCompleted
-                ? `/week?referenceDate=${referenceDate}`
-                : `/week?referenceDate=${referenceDate}&showCompleted=1`
-            }
-            className="text-xs text-slate-500 underline hover:text-slate-700"
-          >
-            {showCompleted ? "未完了を表示" : "完了を表示"}
-          </a>
-          <StatusBadge tone="secondary">
-            {`予定 ${formatHoursFromMinutes(metrics.plannedMinutes)}`}
-          </StatusBadge>
-          <StatusBadge tone="secondary">
-            {`実績 ${formatHoursFromMinutes(metrics.actualMinutes)}`}
-          </StatusBadge>
-          <StatusBadge tone={metrics.atRiskTaskCount > 0 ? "warning" : "outline"}>
-            {`注意 ${metrics.atRiskTaskCount}`}
-          </StatusBadge>
-          <StatusBadge tone={monthReserveMinutes > 0 ? "warning" : "outline"}>
-            {monthReserveMinutes > 0
-              ? `バッファ使用 ${formatHoursFromMinutes(monthReserveMinutes)}`
-              : "通常予算内"}
-          </StatusBadge>
-        </div>
-      </div>
-
-      <PlanningAlert initialHealth={planningHealth} />
-
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border-white/80 bg-white/94">
-          <CardContent className="p-4">
-            <PlanningCalendar initialPayload={calendarPayload} today={today} />
-          </CardContent>
-        </Card>
-
-        <Card className="border-white/80 bg-white/94">
-          <CardHeader>
-            <CardTitle className="text-lg tracking-[-0.03em]">task 一覧</CardTitle>
-          </CardHeader>
-          <CardContent className="px-0 pt-0">
-            <div className="overflow-x-auto px-4 pb-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>task</TableHead>
-                    <TableHead>全体</TableHead>
-                    <TableHead>残り</TableHead>
-                    <TableHead>進捗</TableHead>
-                    <TableHead>期限</TableHead>
-                    <TableHead>見込み</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {taskOverview.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell>
-                        <div className="grid gap-1">
-                          <span className="font-medium text-slate-900">{task.title}</span>
-                          <div className="flex flex-wrap gap-1">
-                            {task.taskType && task.taskType !== "unknown" ? (
-                              <StatusBadge tone="outline">
-                                {taskTypeLabels[task.taskType] ?? task.taskType}
-                              </StatusBadge>
-                            ) : null}
-                            {task.cognitiveLoad && task.cognitiveLoad !== "unknown" ? (
-                              <StatusBadge tone="outline">
-                                {cognitiveLoadLabels[task.cognitiveLoad] ?? task.cognitiveLoad}
-                              </StatusBadge>
-                            ) : null}
-                            {task.energy && task.energy !== "unknown" ? (
-                              <StatusBadge tone="outline">
-                                {energyLabels[task.energy] ?? task.energy}
-                              </StatusBadge>
-                            ) : null}
-                            {task.tags?.map((tag) => (
-                              <StatusBadge key={tag} tone="outline">
-                                {tag}
-                              </StatusBadge>
-                            ))}
-                          </div>
-                          {task.upcomingSchedule.length > 0 ? (
-                            <div className="text-xs text-slate-500">
-                              {task.upcomingSchedule.join(" / ")}
-                            </div>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatHoursFromMinutes(task.totalMinutes)}</TableCell>
-                      <TableCell>{formatHoursFromMinutes(task.remainingMinutes)}</TableCell>
-                      <TableCell>{formatCompletionRate(task.spentMinutes, task.totalMinutes)}</TableCell>
-                      <TableCell>{task.dueDate ?? "-"}</TableCell>
-                      <TableCell>{task.endDate ?? "-"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </section>
+    <Stack gap={{ base: "5", md: "7" }}>
+      <Box>
+        <Heading size="2xl" letterSpacing="-0.04em" color="#1e302e">計画</Heading>
+        <Text mt="1.5" color="#71807e" fontSize="sm">日ごとの余力時間と、タスクの配分を確認します。</Text>
+      </Box>
+      <Box borderWidth="1px" borderColor="#e2e9e6" borderRadius="2xl" bg="white" p={{ base: "3", sm: "5", lg: "6" }}>
+        <PlanningCalendar initialPayload={calendarPayload} today={today} />
+      </Box>
+      <PlanningAlert initialHealth={planningHealth as {
+        missingCapacityDatesWithin7Days: string[];
+        hasInsufficientCapacity?: boolean;
+        shortfallMinutes?: number;
+        horizonEnd?: string;
+      }} />
+    </Stack>
   );
 }
+
+export default WeekPage;
