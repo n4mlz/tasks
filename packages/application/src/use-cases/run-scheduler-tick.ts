@@ -123,6 +123,7 @@ export async function runSchedulerTickUseCase(
     }
 
     const analysis = await deps.planningIntelligence.analyzeSchedule({
+      operationId: runId,
       today: deps.clock.today(),
       tasks,
       capacities,
@@ -165,6 +166,7 @@ export async function runSchedulerTickUseCase(
       try {
         console.log("[scheduler] correction attempt", attempt + 1, "errors:", sliceValidation.errors);
         const correction = await deps.planningIntelligence.correctSchedule({
+          operationId: runId,
           tasks: annotatedTasks,
           capacities,
           horizonStart: horizon.start,

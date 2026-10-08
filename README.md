@@ -198,6 +198,8 @@ TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS=true
 TASK_PLATFORM_LLM_TIMEOUT_MS=20000
 ```
 
+OpenCode Go を使う場合は、base URL を `https://opencode.ai/zen/go/v1` に設定します。DeepSeek V4.1 Flash のモデル ID は `deepseek-v4.1-flash` です。OpenCode Go 宛てのリクエストには識別用 User-Agent と `x-opencode-session` を自動で付けます。セッション ID はスケジューラー実行ごとに割り当てられ、同じ実行内の再試行では維持されます。
+
 LLM が未設定なら task 分析は失敗として扱われ、簡易ヒューリスティックへのフォールバックはしません。
 
 ## scheduler の動き

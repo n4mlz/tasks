@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { generateText, Output } from "ai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
@@ -94,18 +95,18 @@ function resolveModel() {
   loadWorkspaceEnv();
 
   const provider = process.env.TASK_PLATFORM_LLM_PROVIDER ?? "openai-compatible";
-  const modelId = process.env.TASK_PLATFORM_LLM_MODEL?.trim();
-
-  if (!modelId) {
-    return {
-      model: null,
-      fallbackReason: "TASK_PLATFORM_LLM_MODEL が未設定です。",
-    };
-  }
   if (provider === "openai") {
+    const modelId = process.env.TASK_PLATFORM_LLM_MODEL?.trim();
+    if (!modelId) {
+      return { model: null, fallbackReason: "TASK_PLATFORM_LLM_MODEL が未設定です。" };
+    }
     return { model: openai(modelId), fallbackReason: null };
   }
   if (provider === "anthropic") {
+    const modelId = process.env.TASK_PLATFORM_LLM_MODEL?.trim();
+    if (!modelId) {
+      return { model: null, fallbackReason: "TASK_PLATFORM_LLM_MODEL が未設定です。" };
+    }
     return { model: anthropic(modelId), fallbackReason: null };
   }
 
@@ -117,10 +118,26 @@ function resolveModel() {
     };
   }
 
+  const isOpenCodeGo = isOpenCodeGoEndpoint(baseURL);
+  const modelId =
+    process.env.TASK_PLATFORM_LLM_MODEL?.trim() ||
+    (isOpenCodeGo ? "deepseek-v4.1-flash" : "");
+  if (!modelId) {
+    return {
+      model: null,
+      fallbackReason: "TASK_PLATFORM_LLM_MODEL が未設定です。",
+    };
+  }
+
   const compatibleProvider = createOpenAICompatible({
     name: "task-platform-local",
     baseURL,
     apiKey: process.env.TASK_PLATFORM_LLM_API_KEY ?? "local",
+    ...(isOpenCodeGo && {
+      headers: {
+        "user-agent": "task-platform/0.0.1",
+      },
+    }),
     supportsStructuredOutputs:
       process.env.TASK_PLATFORM_LLM_SUPPORTS_STRUCTURED_OUTPUTS === "true",
   });
@@ -142,6 +159,18 @@ function resolveTimeoutMs(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 20_000;
 }
 
+function isOpenCodeGoEndpoint(baseURL: string): boolean {
+  try {
+    const url = new URL(baseURL);
+    return (
+      url.origin === "https://opencode.ai" &&
+      url.pathname.replace(/\/$/, "") === "/zen/go/v1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function createPlanningIntelligence(): PlanningIntelligence {
   const { model, fallbackReason } = resolveModel();
   const timeoutMs = resolveTimeoutMs();
@@ -156,9 +185,15 @@ export function createPlanningIntelligence(): PlanningIntelligence {
     };
   }
   const resolvedModel = model;
+  const isOpenCodeGo = isOpenCodeGoEndpoint(
+    process.env.TASK_PLATFORM_LLM_BASE_URL?.trim() ?? "",
+  );
 
   return {
     async analyzeSchedule(input) {
+      const requestHeaders = isOpenCodeGo
+        ? { "x-opencode-session": input.operationId ?? randomUUID() }
+        : undefined;
       const system = [
         "あなたは個人の task planning assistant です。",
         "与えられた全 task を分類し、各 task の taskType / cognitiveLoad / energy / tags を返してください。",
@@ -231,6 +266,7 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       async function runStructured(): Promise<PlannerOutput> {
         const { output } = await generateText({
           model: resolvedModel,
+          headers: requestHeaders,
           abortSignal: AbortSignal.timeout(timeoutMs),
           output: Output.object({ schema: plannerOutputSchema }),
           system,
@@ -243,6 +279,7 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       async function runPlainJson(): Promise<PlannerOutput> {
         const { text } = await generateText({
           model: resolvedModel,
+          headers: requestHeaders,
           abortSignal: AbortSignal.timeout(timeoutMs),
           system,
           prompt: plainJsonPrompt,
@@ -292,6 +329,9 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       }
     },
     async correctSchedule(input) {
+      const requestHeaders = isOpenCodeGo
+        ? { "x-opencode-session": input.operationId ?? randomUUID() }
+        : undefined;
       function translateError(e: string): string {
         const parts = e.split(":");
         const code = parts[0];
@@ -349,6 +389,7 @@ export function createPlanningIntelligence(): PlanningIntelligence {
       try {
         const { text } = await generateText({
           model: resolvedModel,
+          headers: requestHeaders,
           abortSignal: AbortSignal.timeout(timeoutMs),
           prompt: correctionPrompt,
         });
