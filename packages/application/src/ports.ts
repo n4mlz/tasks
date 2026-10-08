@@ -219,6 +219,7 @@ export interface Clock {
 
 export interface PlanningIntelligence {
   analyzeSchedule(input: {
+    operationId?: string;
     today: string;
     tasks: Task[];
     capacities: DayCapacity[];
@@ -241,6 +242,7 @@ export interface PlanningIntelligence {
   }>;
 
   correctSchedule(input: {
+    operationId?: string;
     tasks: import("@task-platform/domain").Task[];
     capacities: import("@task-platform/domain").DayCapacity[];
     horizonStart: string;
