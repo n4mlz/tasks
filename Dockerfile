@@ -29,6 +29,8 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json /app/pnpm-workspace.yaml ./
 
+LABEL org.opencontainers.image.source="https://github.com/n4mlz/tasks"
+
 EXPOSE 3000 3100
 ENV HOST=0.0.0.0
 ENV PORT=3000
